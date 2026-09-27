@@ -149,3 +149,96 @@ class DashboardStats(BaseModel):
     undetermined: int
     scans_this_month: int
     scans_limit: int
+
+
+# ── Dataset & Quality Gate Schemas ───────────────────────────────────────────
+
+class DatasetRecordCreate(BaseModel):
+    sample_id: str
+    category: str
+    source_dataset: str
+    license_terms: str
+    subject_id: Optional[str] = None
+    video_id: Optional[str] = None
+    generator_family: Optional[str] = "none"
+    manipulation_type: Optional[str] = "none"
+    device_class: Optional[str] = "laptop_webcam_720p"
+    environment_type: Optional[str] = "indoor_bright"
+    resolution: Optional[str] = "720p"
+    fps: Optional[int] = 30
+    true_label: str
+    split: Optional[str] = "train"
+    file_path: Optional[str] = None
+    sha256_checksum: Optional[str] = None
+    consent_verified: bool = True
+    metadata_json: Optional[Dict[str, Any]] = None
+
+
+class DatasetRecordResponse(DatasetRecordCreate):
+    id: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class QualityGateRequest(BaseModel):
+    image_base64: str
+
+
+class QualityGateResponse(BaseModel):
+    passed: bool
+    overall_quality_score: float
+    quality_label: str
+    sharpness_score: float
+    mean_luminance: float
+    overexposed_ratio: float
+    underexposed_ratio: float
+    face_resolution: List[int]
+    motion_blur_detected: bool
+    rejection_reasons: List[str]
+    recommended_guidance: Optional[str] = None
+
+
+class FailureCaseCreate(BaseModel):
+    model_version: str
+    input_type: str
+    device: Optional[str] = "laptop_webcam_720p"
+    resolution: Optional[str] = "720p"
+    environment: Optional[str] = "indoor_bright"
+    true_label: str
+    prediction: str
+    confidence: float
+    reason: str
+
+
+class FailureCaseResponse(FailureCaseCreate):
+    id: str
+    failure_id: str
+    is_verified_by_human: bool
+    reviewed_by: Optional[str]
+    added_to_training_set: bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class ModelRegistryResponse(BaseModel):
+    id: str
+    model_id: str
+    model_name: str
+    version: str
+    status: str
+    license: str
+    weights_license: str
+    checksum_sha256: str
+    ece_score: Optional[float]
+    brier_score: Optional[float]
+    latency_ms: Optional[float]
+    approved_by: Optional[str]
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class DatasetSummaryStats(BaseModel):
+    total_samples: int
+    category_counts: Dict[str, int]
+    split_counts: Dict[str, int]
+    consent_compliance_pct: float

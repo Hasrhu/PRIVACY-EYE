@@ -246,3 +246,95 @@ class FaceTrainingSample(Base):
     image_path: Mapped[Optional[str]] = mapped_column(String(500))  # Saved only if consent_given is True
     landmarks_json: Mapped[Optional[dict]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ── Dataset Governance & Lineage ─────────────────────────────────────────────
+
+class DatasetRecord(Base):
+    __tablename__ = "dataset_records"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    sample_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # CATEGORY_A_GENUINE, etc.
+    source_dataset: Mapped[str] = mapped_column(String(100), nullable=False)        # "InternalConsented", "FaceForensics++"
+    license_terms: Mapped[str] = mapped_column(String(100), nullable=False)         # "CC-BY-4.0", "InternalConsent"
+    subject_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)      # For subject-disjoint splits
+    video_id: Mapped[Optional[str]] = mapped_column(String(100))
+    generator_family: Mapped[Optional[str]] = mapped_column(String(50))             # "stylegan2", "sdxl", etc.
+    manipulation_type: Mapped[Optional[str]] = mapped_column(String(50))            # "faceswap", "replay", etc.
+    device_class: Mapped[Optional[str]] = mapped_column(String(50))
+    environment_type: Mapped[Optional[str]] = mapped_column(String(50))
+    resolution: Mapped[Optional[str]] = mapped_column(String(20))
+    fps: Mapped[Optional[int]] = mapped_column(Integer, default=30)
+    true_label: Mapped[str] = mapped_column(String(50), nullable=False)             # "real", "fake", "replay"
+    split: Mapped[str] = mapped_column(String(50), default="train", index=True)     # "train", "val", "test_unseen_subject"
+    file_path: Mapped[Optional[str]] = mapped_column(String(500))
+    sha256_checksum: Mapped[Optional[str]] = mapped_column(String(64))
+    consent_verified: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        Index("ix_dataset_category_split", "category", "split"),
+    )
+
+
+# ── Failure Cases (Hard Negative Mining) ─────────────────────────────────────
+
+class FailureCase(Base):
+    __tablename__ = "failure_cases"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    failure_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    model_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    input_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    device: Mapped[Optional[str]] = mapped_column(String(50))
+    resolution: Mapped[Optional[str]] = mapped_column(String(20))
+    environment: Mapped[Optional[str]] = mapped_column(String(50))
+    true_label: Mapped[str] = mapped_column(String(50), nullable=False)
+    prediction: Mapped[str] = mapped_column(String(50), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    is_verified_by_human: Mapped[bool] = mapped_column(Boolean, default=False)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String(100))
+    added_to_training_set: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ── Model Registry & Governance ──────────────────────────────────────────────
+
+class ModelRegistry(Base):
+    __tablename__ = "model_registry"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    model_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="EXPERIMENTAL")  # EXPERIMENTAL, VALIDATION, STAGING, PRODUCTION, DEPRECATED
+    license: Mapped[str] = mapped_column(String(100), nullable=False)
+    weights_license: Mapped[str] = mapped_column(String(100), nullable=False)
+    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    ece_score: Mapped[Optional[float]] = mapped_column(Float)
+    brier_score: Mapped[Optional[float]] = mapped_column(Float)
+    latency_ms: Mapped[Optional[float]] = mapped_column(Float)
+    approved_by: Mapped[Optional[str]] = mapped_column(String(100))
+    metrics_json: Mapped[Optional[dict]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ── Live Camera Sessions ─────────────────────────────────────────────────────
+
+class LiveSession(Base):
+    __tablename__ = "live_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    session_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    device_info: Mapped[Optional[str]] = mapped_column(String(200))
+    stream_fps: Mapped[Optional[float]] = mapped_column(Float)
+    resolution: Mapped[Optional[str]] = mapped_column(String(50))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(50), default="ACTIVE")
+    total_frames_analyzed: Mapped[int] = mapped_column(Integer, default=0)
+    avg_latency_ms: Mapped[Optional[float]] = mapped_column(Float)
