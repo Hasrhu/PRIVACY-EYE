@@ -1,0 +1,59 @@
+.env
+.env.*
+!.env.example
+*.pyc
+__pycache__/
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+*.log
+
+# ML
+ml/weights/
+ml/data/raw/
+*.pt
+*.pth
+*.onnx
+*.pkl
+
+# Uploads
+tmp/
+uploads/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.pem
+*.key
+*.cert
+secrets/
+
+# Databases & local data
+*.db
+*.sqlite
+*.sqlite3
+backend/privacy_eye.db
+backend/data/
+data/
