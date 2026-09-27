@@ -20,6 +20,13 @@ import cv2
 from typing import Dict, Any, List, Optional, Tuple
 from PIL import Image
 
+from app.ml.benchmarks import (
+    FaceForensicsAnalyzer,
+    CelebDFAnalyzer,
+    SilentFaceAntiSpoofingEngine,
+    FFHQPolicyProcessor,
+)
+
 logger = structlog.get_logger(__name__)
 
 # Calibration settings
@@ -31,6 +38,12 @@ class LiveAuthenticityEngine:
         self.model_path = model_path
         self._detector: Optional[cv2.FaceDetectorYN] = None
         self._init_detector()
+
+        # Landmark Benchmark Analyzers (FaceForensics++, Celeb-DF, Silent-Face, FFHQ)
+        self._faceforensics = FaceForensicsAnalyzer()
+        self._celeb_df = CelebDFAnalyzer()
+        self._silent_face = SilentFaceAntiSpoofingEngine()
+        self._ffhq_policy = FFHQPolicyProcessor()
 
         # Session temporal memory: session_id -> list of recent frame metrics
         self._session_buffers: Dict[str, List[Dict[str, Any]]] = {}
@@ -1046,6 +1059,13 @@ class LiveAuthenticityEngine:
         # 4. Face-Swap & Boundary Artifacts
         swap_res = self.detect_face_swap_artifacts(img_bgr, face_box)
 
+        # 4b. Landmark Benchmark Analyzers (FaceForensics++, Celeb-DF, Silent-Face, FFHQ)
+        ff_res = self._faceforensics.full_forensics_scan(face_crop, img_bgr)
+        landmark_pts = np.array([landmarks[k] for k in ["right_eye", "left_eye", "nose_tip", "right_mouth", "left_mouth"]])
+        celeb_res = self._celeb_df.full_celeb_scan(face_crop, landmark_pts)
+        silent_res = self._silent_face.full_silent_face_scan(img_bgr, face_box)
+        ffhq_res = self._ffhq_policy.estimate_texture_realism(face_crop)
+
         # 5. Pose & Physiological Liveness
         pose = self.estimate_head_pose_and_liveness(landmarks, face_box)
 
@@ -1140,6 +1160,42 @@ class LiveAuthenticityEngine:
                 "label": f"Active presence challenge verified ({challenge_info['type']})",
                 "severity": "low",
                 "detail": "Dynamic facial pose rotation matched cryptographic challenge timing.",
+            })
+
+        # Benchmark Evidence Fusion (Silent-Face, FaceForensics++, Celeb-DF, FFHQ)
+        if silent_res["is_presentation_attack"]:
+            presentation_risk = max(presentation_risk, silent_res["silent_face_spoof_score"])
+            fused_signals.append({
+                "key": "silent_face_pad_attack",
+                "label": f"MiniVision PAD Detection: {silent_res['detected_attack_type']}",
+                "severity": "high",
+                "detail": f"Dual-scale Fourier harmonic peak-ratio ({silent_res['scale_1_0_fourier']['peak_to_average_ratio']}) indicates screen or print attack.",
+            })
+
+        if ff_res["is_manipulated"]:
+            spatial_risk = max(spatial_risk, ff_res["faceforensics_score"])
+            fused_signals.append({
+                "key": "faceforensics_boundary_manipulation",
+                "label": f"FaceForensics++ Analysis: {ff_res['detected_method']}",
+                "severity": "high",
+                "detail": f"Gradient ratio {ff_res['boundary']['gradient_ratio']} & chroma mismatch {ff_res['color_consistency']['chroma_mismatch_score']} indicate swapped face.",
+            })
+
+        if celeb_res["is_deepfake"]:
+            spatial_risk = max(spatial_risk, celeb_res["celeb_df_score"])
+            fused_signals.append({
+                "key": "celeb_df_ocular_synthesis",
+                "label": "Celeb-DF Forensics: High-quality generative synthesis residue",
+                "severity": "high",
+                "detail": f"Ocular high-frequency energy ({celeb_res['ocular_synthesis']['eye_hf_energy']}) indicates synthetic deepfake inpainting.",
+            })
+
+        if ffhq_res["is_organic"]:
+            fused_signals.append({
+                "key": "ffhq_texture_organic",
+                "label": "FFHQ Texture Baseline: Natural epidermal micro-pores verified",
+                "severity": "low",
+                "detail": f"Cheek pore variance {ffhq_res['cheek_pore_variance']} and specular corneal highlights match bona fide human skin.",
             })
 
         # 10. Headphone & Ear Accessory Detection
@@ -1306,6 +1362,27 @@ class LiveAuthenticityEngine:
             "criteria_evaluation": criteria_evaluation,
             "guided_protocol": guided_protocol,
             "ear_accessories": ear_accessories,
+            "benchmarks": {
+                "faceforensics": {
+                    "score": ff_res["faceforensics_score"],
+                    "is_manipulated": ff_res["is_manipulated"],
+                    "method": ff_res["detected_method"],
+                },
+                "celeb_df": {
+                    "score": celeb_res["celeb_df_score"],
+                    "is_deepfake": celeb_res["is_deepfake"],
+                },
+                "silent_face": {
+                    "score": silent_res["silent_face_spoof_score"],
+                    "is_presentation_attack": silent_res["is_presentation_attack"],
+                    "attack_type": silent_res["detected_attack_type"],
+                },
+                "ffhq_baseline": {
+                    "texture_realism_score": ffhq_res["texture_realism_score"],
+                    "is_organic": ffhq_res["is_organic"],
+                    "policy": ffhq_res["policy_status"],
+                },
+            },
             "challenge": {
                 "active": run_challenge,
                 "info": challenge_info,

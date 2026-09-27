@@ -17,8 +17,19 @@ import struct
 import numpy as np
 from typing import Any
 import structlog
+import cv2
+
+from app.ml.benchmarks import (
+    FaceForensicsAnalyzer,
+    SilentFaceAntiSpoofingEngine,
+    FFHQPolicyProcessor,
+)
 
 logger = structlog.get_logger(__name__)
+
+_faceforensics_analyzer = FaceForensicsAnalyzer()
+_silent_face_analyzer = SilentFaceAntiSpoofingEngine()
+_ffhq_processor = FFHQPolicyProcessor()
 
 # ── Risk mapping ─────────────────────────────────────────────────────────────
 
@@ -227,8 +238,43 @@ def forensics_analyze_image(data: bytes, filename: str) -> dict:
         except Exception as e:
             logger.debug("Noise analysis failed", error=str(e))
 
+        # ── 5. Benchmark Forensic Checks (FaceForensics, Silent-Face, FFHQ) ───
+        benchmark_score = 0.0
+        try:
+            nparr = np.frombuffer(data, np.uint8)
+            img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img_bgr is not None:
+                ff_res = _faceforensics_analyzer.full_forensics_scan(img_bgr)
+                raw_scores["faceforensics"] = ff_res["faceforensics_score"]
+                if ff_res["is_manipulated"]:
+                    benchmark_score = max(benchmark_score, ff_res["faceforensics_score"])
+                    signals.append({
+                        "key": "faceforensics_manipulation",
+                        "label": f"FaceForensics++: {ff_res['detected_method']}",
+                        "severity": "high",
+                        "score": ff_res["faceforensics_score"],
+                        "description": "Boundary feathering or chroma temperature discrepancy indicates manipulated media.",
+                    })
+
+                silent_fourier = _silent_face_analyzer.analyze_fourier_spectrum(img_bgr)
+                raw_scores["silent_face_fourier"] = silent_fourier["fourier_spoof_score"]
+                if silent_fourier["has_periodic_grid"]:
+                    benchmark_score = max(benchmark_score, silent_fourier["fourier_spoof_score"])
+                    signals.append({
+                        "key": "silent_face_grid",
+                        "label": "MiniVision PAD: Periodic grid pattern detected",
+                        "severity": "high",
+                        "score": silent_fourier["fourier_spoof_score"],
+                        "description": "High-frequency Fourier harmonics indicate physical photo printout or electronic display replay.",
+                    })
+
+                ffhq_res = _ffhq_processor.estimate_texture_realism(img_bgr)
+                raw_scores["ffhq_texture_realism"] = ffhq_res["texture_realism_score"]
+        except Exception as e:
+            logger.debug("Benchmark forensics failed", error=str(e))
+
         # ── Evidence fusion ─────────────────────────────────────────────────
-        component_scores = [s for s in [exif_score, ela_score, fft_score, noise_score] if s > 0]
+        component_scores = [s for s in [exif_score, ela_score, fft_score, noise_score, benchmark_score] if s > 0]
         if component_scores:
             # Weighted fusion: max signal weighted heavily
             synthetic_prob = float(np.mean(component_scores) * 0.6 + max(component_scores) * 0.4)
