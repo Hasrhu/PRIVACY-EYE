@@ -1,0 +1,14 @@
+sample_id,subject_id,source_video_id,dataset,label,attack_type,generator,camera,resolution,fps,environment,compression,license,consent_status,split
+PE_A_0001,subj_001,vid_001_01,InternalConsented,REAL,NONE,NONE,mac_facetime_720p,720p,30,office_bright,h264_q20,InternalConsent-v1,True,train
+PE_A_0002,subj_002,vid_002_01,InternalConsented,REAL,NONE,NONE,logitech_c920,1080p,30,classroom_bright,h264_q22,InternalConsent-v1,True,train
+PE_A_0003,subj_003,vid_003_01,InternalConsented,REAL,NONE,NONE,android_flagship,1080p,60,outdoor_sunny,h264_q20,InternalConsent-v1,True,val
+PE_A_0004,subj_004,vid_004_01,InternalConsented,REAL,NONE,NONE,iphone_14,1080p,30,bedroom_dim,h264_q24,InternalConsent-v1,True,test_unseen_subject
+PE_B_0001,None,None,GenImage,SYNTHETIC,NONE,STYLEGAN2,virtual_render,1024p,None,synthetic_studio,lossless_png,ResearchTerms,True,train
+PE_B_0002,None,None,GenImage,SYNTHETIC,NONE,STABLE_DIFFUSION_15,virtual_render,512p,None,synthetic_studio,lossless_png,ResearchTerms,True,train
+PE_B_0003,None,None,GenImage,SYNTHETIC,NONE,FLUX_1,virtual_render,1024p,None,synthetic_studio,lossless_png,ResearchTerms,True,test_unseen_generator
+PE_C_0001,subj_005,vid_005_swap,FaceForensics++,SYNTHETIC,FACE_SWAP,FaceShifter,broadcast_cam,720p,30,studio,c23,FaceForensicsResearch,True,train
+PE_C_0002,subj_006,vid_006_swap,Celeb-DF,SYNTHETIC,DEEPFAKES,DeepFaceLab,youtube_cam,720p,30,outdoor,h264,CelebDFResearch,True,test_unseen_subject
+PE_D_0001,subj_007,vid_007_replay,InternalPAD,PRESENTATION_ATTACK,SCREEN_REPLAY,NONE,tablet_ips,1080p,60,office_bright,h264_q24,InternalConsent-v1,True,train
+PE_D_0002,subj_008,vid_008_print,InternalPAD,PRESENTATION_ATTACK,PRINTED_PHOTO,NONE,paper_print,480p,30,bedroom_dim,h264_q30,InternalConsent-v1,True,test_unseen_device
+PE_E_0001,subj_009,vid_009_dark,InternalHardNeg,REAL,NONE,NONE,budget_usb_cam,480p,15,extreme_low_light,raw_yuy2,InternalConsent-v1,True,train
+PE_E_0002,subj_010,vid_010_blur,InternalHardNeg,REAL,NONE,NONE,mac_facetime_720p,720p,30,motion_blur,h264_q22,InternalConsent-v1,True,test_unseen_subject
