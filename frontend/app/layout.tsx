@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 
 export const metadata: Metadata = {
   title: { default: 'Privacy Eye — AI Deepfake Detection', template: '%s | Privacy Eye' },
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             error:   { iconTheme: { primary: '#dc2626', secondary: '#fff' } },
           }}
         />
+        <SpeedInsights />
       </body>
     </html>
   )
