@@ -103,14 +103,14 @@ export default function ScannerModal({ type, onClose, onComplete }: Props) {
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
         <motion.div
-          className="relative glass rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="relative rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto glass-floating border border-white/16 shadow-glass-floating p-2"
           initial={{ scale: 0.92, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.92, opacity: 0 }}
           transition={{ type: 'spring', damping: 25 }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-white/5">
+          <div className="flex items-center justify-between p-6 border-b border-white/8">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-brand-500/20 flex items-center justify-center">
                 <Shield className="w-5 h-5 text-brand-400" />

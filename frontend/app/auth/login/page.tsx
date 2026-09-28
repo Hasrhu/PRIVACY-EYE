@@ -1,26 +1,37 @@
 'use client'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, ArrowRight, Shield } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { authApi, getErrorMessage } from '@/lib/api'
 
-interface LoginForm { email: string; password: string }
+import { authApi, getErrorMessage } from '@/lib/api'
+import { BrandLogo } from '@/components/layout/BrandLogo'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { GlassButton } from '@/components/ui/GlassButton'
+
+interface LoginForm {
+  email: string
+  password: string
+}
 
 export default function LoginPage() {
   const router = useRouter()
-  const [showPw, setShowPw] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>()
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>()
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true)
     try {
       await authApi.login(data.email, data.password)
-      toast.success('Welcome back.')
+      toast.success('Authentication confirmed.')
       router.push('/dashboard')
     } catch (err) {
       toast.error(getErrorMessage(err))
@@ -30,95 +41,95 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2" style={{ background: '#0a0a0a' }}>
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden" style={{ background: '#111111', borderRight: '1px solid rgba(255,255,255,0.04)' }}>
-        <div className="absolute inset-0 grid-overlay opacity-50" />
-        <Link href="/" className="flex items-center gap-3 relative z-10">
-          <div className="w-8 h-8 rounded flex items-center justify-center" style={{ background: '#dc2626' }}>
-            <Shield className="w-5 h-5 text-white" />
+    <div className="min-h-screen flex items-center justify-center p-4 bg-canvas relative">
+      {/* Background ambient lighting */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-blue/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-brand-violet/10 rounded-full blur-[100px] pointer-events-none" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-md"
+      >
+        <div className="flex justify-center mb-8">
+          <BrandLogo size="lg" />
+        </div>
+
+        <GlassCard variant="floating" className="p-8 md:p-10 space-y-6 border border-white/14">
+          <div className="text-center space-y-1">
+            <span className="text-xs uppercase font-mono tracking-widest text-brand-blue">
+              Secure Perimeter Access
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Sign In to Privacy Eye</h1>
+            <p className="text-xs text-white/50">Enter credentials to unlock active protection</p>
           </div>
-          <span className="font-display text-xl tracking-wider text-white">PRIVACY EYE</span>
-        </Link>
 
-        <div className="relative z-10">
-          <h1 className="font-display text-white leading-none mb-6" style={{ fontSize: '5rem' }}>
-            VERIFY<br />
-            <span style={{ color: '#dc2626' }}>WHAT<br />YOU SEE.</span>
-          </h1>
-          <p className="text-sm max-w-sm" style={{ color: '#6b7280', lineHeight: '1.7' }}>
-            AI Can Fake It. Privacy Eye Can Check It. Deepfake detection, voice clone analysis, and synthetic media forensics — all in one platform.
-          </p>
-        </div>
-
-        <div className="flex gap-8 relative z-10">
-          {[['15+', 'Signals'], ['<5s', 'Analysis'], ['0', 'Files Stored']].map(([n, l]) => (
-            <div key={l}>
-              <div className="font-display text-3xl" style={{ color: '#dc2626' }}>{n}</div>
-              <div className="text-xs font-semibold uppercase tracking-wide2 mt-0.5" style={{ color: '#6b7280' }}>{l}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Right panel — form */}
-      <div className="flex items-center justify-center px-6 py-12">
-        <motion.div
-          className="w-full max-w-md"
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          {/* Mobile logo */}
-          <Link href="/" className="flex items-center gap-3 mb-10 lg:hidden">
-            <div className="w-7 h-7 rounded flex items-center justify-center" style={{ background: '#dc2626' }}>
-              <Shield className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-display text-lg tracking-wider text-white">PRIVACY EYE</span>
-          </Link>
-
-          <p className="section-label mb-3">Welcome Back</p>
-          <h2 className="text-3xl font-black text-white mb-8">Sign In</h2>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wide2 mb-2" style={{ color: '#9ca3af' }}>Email</label>
-              <input type="email" className="input-dark" placeholder="you@example.com"
-                {...register('email', { required: 'Email is required' })} />
-              {errors.email && <p className="text-xs mt-1.5 font-medium" style={{ color: '#dc2626' }}>{errors.email.message}</p>}
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wide2 mb-2" style={{ color: '#9ca3af' }}>Password</label>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-white/70">Email Address</label>
               <div className="relative">
-                <input type={showPw ? 'text' : 'password'} className="input-dark pr-11" placeholder="••••••••"
-                  {...register('password', { required: 'Password is required' })} />
-                <button type="button" onClick={() => setShowPw(!showPw)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
-                  style={{ color: '#6b7280' }}>
-                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+                <input
+                  type="email"
+                  placeholder="analyst@enterprise.com"
+                  className="glass-input pl-11"
+                  {...register('email', { required: 'Email address is required' })}
+                />
+              </div>
+              {errors.email && (
+                <p className="text-xs text-status-danger">{errors.email.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-white/70">Password</label>
+                <span className="text-[11px] text-brand-blue cursor-pointer hover:underline">
+                  Forgot?
+                </span>
+              </div>
+              <div className="relative">
+                <Lock className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••••••"
+                  className="glass-input pl-11 pr-11"
+                  {...register('password', { required: 'Password is required' })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              {errors.password && <p className="text-xs mt-1.5 font-medium" style={{ color: '#dc2626' }}>{errors.password.message}</p>}
+              {errors.password && (
+                <p className="text-xs text-status-danger">{errors.password.message}</p>
+              )}
             </div>
 
-            <button type="submit" disabled={loading} className="btn-red w-full justify-center mt-2" style={{ width: '100%' }}>
-              {loading ? <><span className="spinner w-4 h-4" style={{ borderTopColor: '#fff' }} /> Signing in…</> : <>Sign In <ArrowRight className="w-4 h-4" /></>}
-            </button>
+            <GlassButton
+              type="submit"
+              variant="primary"
+              size="lg"
+              isLoading={loading}
+              className="w-full shadow-glow-blue mt-2"
+              icon={<ArrowRight className="w-4 h-4" />}
+            >
+              Sign In
+            </GlassButton>
           </form>
 
-          <p className="text-center text-sm mt-8" style={{ color: '#6b7280' }}>
-            No account?{' '}
-            <Link href="/auth/register" className="font-bold transition-colors hover:text-white" style={{ color: '#dc2626' }}>
-              Create one free
+          <div className="pt-4 border-t border-white/6 text-center text-xs text-white/50">
+            Don't have an account?{' '}
+            <Link href="/auth/register" className="text-brand-blue font-semibold hover:underline">
+              Create an account
             </Link>
-          </p>
-
-          <p className="text-center text-xs mt-6" style={{ color: '#374151' }}>
-            Results are probabilistic indicators only. Not legal advice.
-          </p>
-        </motion.div>
-      </div>
+          </div>
+        </GlassCard>
+      </motion.div>
     </div>
   )
 }

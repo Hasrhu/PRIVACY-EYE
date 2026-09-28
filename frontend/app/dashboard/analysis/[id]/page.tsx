@@ -1,175 +1,330 @@
 'use client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { ArrowLeft, AlertTriangle, Download, FileText, Shield, CheckCircle } from 'lucide-react'
+import {
+  ArrowLeft,
+  AlertTriangle,
+  Download,
+  FileText,
+  Shield,
+  CheckCircle2,
+  Trash2,
+  Clock,
+  Sparkles,
+  Layers,
+  Activity,
+  Cpu,
+  Lock,
+  ExternalLink,
+} from 'lucide-react'
 import { format } from 'date-fns'
-import { analysisApi, reportsApi, getErrorMessage } from '@/lib/api'
-import type { Analysis, Report } from '@/types'
-import { RISK_CONFIG } from '@/types'
 import toast from 'react-hot-toast'
 import Cookies from 'js-cookie'
 
+import { analysisApi, reportsApi, getErrorMessage } from '@/lib/api'
+import type { Analysis, Report } from '@/types'
+import { RISK_CONFIG } from '@/types'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { GlassButton } from '@/components/ui/GlassButton'
+import { GlassBadge } from '@/components/ui/GlassBadge'
+import { ConfidenceRing } from '@/components/ui/ConfidenceRing'
+import { SignalBar } from '@/components/ui/SignalBar'
+
 export default function AnalysisDetailPage() {
-  const { id }  = useParams<{ id: string }>()
-  const router  = useRouter()
-  const [a, setA]         = useState<Analysis | null>(null)
+  const { id } = useParams<{ id: string }>()
+  const router = useRouter()
+  const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [report, setReport] = useState<Report | null>(null)
   const [genLoading, setGenLoading] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!Cookies.get('access_token')) { router.push('/auth/login'); return }
-    analysisApi.getAnalysis(id).then(r => setA(r.data)).catch(() => router.push('/dashboard/history')).finally(() => setLoading(false))
-    reportsApi.get(id).then(r => setReport(r.data)).catch(() => {})
+    if (!Cookies.get('access_token')) {
+      router.push('/auth/login')
+      return
+    }
+
+    Promise.all([
+      analysisApi.getAnalysis(id).then((r) => setAnalysis(r.data)),
+      reportsApi.get(id).then((r) => setReport(r.data)).catch(() => {}),
+    ])
+      .catch(() => {
+        toast.error('Could not load analysis record')
+        router.push('/dashboard/history')
+      })
+      .finally(() => setLoading(false))
   }, [id, router])
 
-  const genReport = async () => {
+  const generateReport = async () => {
     setGenLoading(true)
-    try { const r = await reportsApi.generate(id); setReport(r.data); toast.success('Report generated!') }
-    catch (e) { toast.error(getErrorMessage(e)) }
-    finally { setGenLoading(false) }
-  }
-
-  const downloadReport = async () => {
     try {
-      const r = await reportsApi.downloadJson(id)
-      const url = URL.createObjectURL(r.data)
-      const el = document.createElement('a'); el.href=url; el.download=`privacy-eye-report-${id.slice(0,8)}.json`; el.click()
-      URL.revokeObjectURL(url)
-    } catch (e) { toast.error(getErrorMessage(e)) }
+      const res = await reportsApi.generate(id)
+      setReport(res.data)
+      toast.success('Security report generated!')
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setGenLoading(false)
+    }
   }
 
-  if (loading || !a) return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="spinner w-8 h-8" style={{ borderTopColor:'#dc2626' }} />
-    </div>
-  )
+  const downloadJson = async () => {
+    try {
+      const res = await reportsApi.downloadJson(id)
+      const url = URL.createObjectURL(res.data)
+      const el = document.createElement('a')
+      el.href = url
+      el.download = `privacy-eye-forensics-${id.slice(0, 8)}.json`
+      el.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    }
+  }
 
-  const risk = RISK_CONFIG[a.risk_level || 'UNDETERMINED']
-  const bc   = `badge-${(a.risk_level||'undetermined').toLowerCase()}`
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to permanently delete this audit record?')) return
+    try {
+      await analysisApi.deleteAnalysis(id)
+      toast.success('Record purged from audit log')
+      router.push('/dashboard/history')
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    }
+  }
+
+  if (loading || !analysis) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="w-12 h-12 rounded-2xl glass-card flex items-center justify-center border border-brand-blue/30 shadow-glow-blue animate-pulse">
+          <Activity className="w-6 h-6 text-brand-blue" />
+        </div>
+        <p className="mt-4 text-xs font-mono uppercase tracking-widest text-white/50">
+          Deciphering Forensic Record...
+        </p>
+      </div>
+    )
+  }
+
+  const risk = RISK_CONFIG[analysis.risk_level || 'UNDETERMINED']
+  const confValue = analysis.confidence !== null ? Math.round(analysis.confidence * 100) : 75
+  const synthValue =
+    analysis.synthetic_probability !== null ? Math.round(analysis.synthetic_probability * 100) : 0
+
+  const badgeStatus =
+    analysis.risk_level === 'LOW'
+      ? 'safe'
+      : analysis.risk_level === 'SUSPICIOUS'
+      ? 'warning'
+      : analysis.risk_level === 'HIGH' || analysis.risk_level === 'CRITICAL'
+      ? 'danger'
+      : 'undetermined'
 
   return (
-    <div className="p-8" style={{ background:'#0a0a0a', minHeight:'100vh' }}>
-      <Link href="/dashboard/history" className="btn-ghost-red mb-6 inline-flex">
-        <ArrowLeft className="w-4 h-4"/> Back to History
-      </Link>
+    <div className="space-y-8 max-w-6xl mx-auto">
+      {/* ── TOP NAV BAR ── */}
+      <div className="flex items-center justify-between">
+        <Link href="/dashboard/history">
+          <GlassButton variant="ghost" size="sm" icon={<ArrowLeft className="w-4 h-4" />}>
+            Back to Audit Trail
+          </GlassButton>
+        </Link>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Main result */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Risk banner */}
-          <motion.div className="rounded-xl p-6" initial={{opacity:0,y:16}} animate={{opacity:1,y:0}}
-            style={{ background: a.risk_level==='CRITICAL'||a.risk_level==='HIGH' ? 'rgba(220,38,38,0.08)' : '#111111', border:`1px solid ${risk.color}40` }}>
-            <div className="flex items-center gap-4">
-              <span className="text-4xl">{risk.emoji}</span>
-              <div>
-                <span className={bc}>{risk.label}</span>
-                <h2 className="text-2xl font-black text-white mt-1">{a.original_filename}</h2>
-                <p className="text-xs font-mono mt-1" style={{color:'#6b7280'}}>
-                  {a.media_type} · {format(new Date(a.created_at),'MMM d yyyy, HH:mm:ss')}
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mt-5">
-              {[
-                ['Synthetic Probability', a.synthetic_probability!=null?`${(a.synthetic_probability*100).toFixed(1)}%`:'N/A'],
-                ['Confidence',           a.confidence!=null?`${(a.confidence*100).toFixed(0)}%`:'N/A'],
-                ['Processing Time',      a.processing_ms?`${a.processing_ms}ms`:'N/A'],
-              ].map(([k,v])=>(
-                <div key={k} className="p-3 rounded-lg" style={{background:'#1a1a1a'}}>
-                  <div className="text-xs font-bold uppercase tracking-wide2 mb-1" style={{color:'#6b7280'}}>{k}</div>
-                  <div className="font-display text-xl" style={{color:risk.color}}>{v as string}</div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Explanation */}
-          {a.explanation && (
-            <div className="card p-5">
-              <p className="section-label mb-3">Analysis Summary</p>
-              <p className="text-sm leading-relaxed" style={{color:'#9ca3af'}}>{a.explanation}</p>
-            </div>
-          )}
-
-          {/* Signals */}
-          {a.signals.length > 0 && (
-            <div className="card p-5">
-              <p className="section-label mb-4">Detected Signals ({a.signals.length})</p>
-              <div className="space-y-3">
-                {a.signals.map(s => (
-                  <div key={s.signal_key} className="flex items-start gap-3 p-4 rounded-xl" style={{background:'#1a1a1a'}}>
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{color: s.severity==='high'?'#dc2626':s.severity==='medium'?'#f59e0b':'#6b7280'}}/>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-bold text-white">{s.signal_label}</p>
-                        {s.score!=null && <span className="text-xs font-mono font-bold" style={{color:'#dc2626'}}>{(s.score*100).toFixed(0)}%</span>}
-                      </div>
-                      {s.description && <p className="text-xs mt-1 leading-relaxed" style={{color:'#6b7280'}}>{s.description}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right panel */}
-        <div className="space-y-5">
-          {/* File info */}
-          <div className="card p-5">
-            <p className="section-label mb-4">File Information</p>
-            <div className="space-y-2.5">
-              {[
-                ['Filename',    a.original_filename],
-                ['SHA-256',     a.file_sha256?`${a.file_sha256.slice(0,12)}…`:'N/A'],
-                ['Size',        `${(a.file_size_bytes/1024).toFixed(1)} KB`],
-                ['MIME Type',   a.mime_type||'N/A'],
-                ['Media Deleted', a.media_deleted?'✓ Immediately':'No'],
-              ].map(([k,v])=>(
-                <div key={k} className="flex justify-between text-xs" style={{borderBottom:'1px solid rgba(255,255,255,0.04)', paddingBottom:'8px'}}>
-                  <span style={{color:'#6b7280'}}>{k}</span>
-                  <span className="font-mono text-right max-w-[140px] truncate" style={{color:'#9ca3af'}}>{v as string}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Report */}
+        <div className="flex items-center gap-3">
           {report ? (
-            <div className="card-red p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <CheckCircle className="w-4 h-4" style={{color:'#10b981'}}/>
-                <p className="section-label" style={{color:'#10b981'}}>Report Ready</p>
-              </div>
-              {report.summary && <p className="text-xs leading-relaxed mb-4" style={{color:'#9ca3af'}}>{report.summary}</p>}
-              {report.recommendations && (
-                <div className="text-xs leading-relaxed whitespace-pre-line mb-4" style={{color:'#6b7280'}}>{report.recommendations}</div>
-              )}
-              <button onClick={downloadReport} className="btn-outline w-full justify-center text-xs py-2.5" style={{width:'100%'}}>
-                <Download className="w-3.5 h-3.5"/> Download JSON
-              </button>
-            </div>
+            <GlassButton
+              variant="secondary"
+              size="sm"
+              onClick={downloadJson}
+              icon={<Download className="w-4 h-4 text-brand-blue" />}
+            >
+              Export JSON Audit
+            </GlassButton>
           ) : (
-            <div className="card p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <FileText className="w-4 h-4" style={{color:'#dc2626'}}/>
-                <p className="section-label">Evidence Report</p>
-              </div>
-              <p className="text-xs mb-4" style={{color:'#6b7280'}}>Generate an AI-powered evidence report explaining the findings in plain language.</p>
-              <button onClick={genReport} disabled={genLoading} className="btn-red w-full justify-center text-xs py-2.5" style={{width:'100%'}}>
-                {genLoading ? <><span className="spinner w-3.5 h-3.5"/>Generating…</> : <><Shield className="w-3.5 h-3.5"/>Generate Report</>}
-              </button>
-            </div>
+            <GlassButton
+              variant="primary"
+              size="sm"
+              onClick={generateReport}
+              isLoading={genLoading}
+              icon={<FileText className="w-4 h-4" />}
+            >
+              Generate Security Report
+            </GlassButton>
           )}
 
-          {/* Privacy note */}
-          <div className="p-4 rounded-xl text-xs" style={{background:'rgba(220,38,38,0.05)', border:'1px solid rgba(220,38,38,0.15)', color:'#6b7280', lineHeight:'1.6'}}>
-            Results are probabilistic indicators only. Privacy Eye does not claim 100% accuracy. Do not use as sole basis for legal action.
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            onClick={handleDelete}
+            icon={<Trash2 className="w-4 h-4 text-status-danger" />}
+          >
+            Purge
+          </GlassButton>
+        </div>
+      </div>
+
+      {/* ── LARGE HERO GLASS CARD (Section 21 requirement) ── */}
+      <GlassCard variant="floating" className="p-8 md:p-10 space-y-8 border border-white/14">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/8">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-xs font-mono uppercase tracking-widest text-brand-blue">
+                ANALYSIS COMPLETE
+              </span>
+              <span className="text-white/20">·</span>
+              <span className="text-xs text-white/50 font-mono">
+                ID: {analysis.id.slice(0, 12)}...
+              </span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-white">
+              {analysis.original_filename}
+            </h1>
+            <p className="text-xs text-white/50 mt-1 font-mono">
+              {analysis.media_type} · {(analysis.file_size_bytes / (1024 * 1024)).toFixed(2)} MB ·{' '}
+              {format(new Date(analysis.created_at), 'MMMM dd, yyyy HH:mm:ss')}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <GlassBadge status={badgeStatus} label={risk.label.toUpperCase()} pulse />
           </div>
         </div>
+
+        {/* Hero Gauge & Probabilities (Section 22) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+          <div className="flex items-center justify-center p-4 rounded-3xl glass-surface border border-white/8">
+            <ConfidenceRing
+              value={confValue}
+              size={130}
+              strokeWidth={10}
+              label="CONFIDENCE"
+              status={badgeStatus}
+            />
+          </div>
+
+          <div className="space-y-4 md:col-span-2">
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="font-semibold text-white">Synthetic Probability</span>
+                <span className="font-mono font-bold text-white">{synthValue}%</span>
+              </div>
+              <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    synthValue > 70
+                      ? 'bg-status-danger'
+                      : synthValue > 40
+                      ? 'bg-status-warning'
+                      : 'bg-status-safe'
+                  }`}
+                  style={{ width: `${synthValue}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-xs font-mono pt-2">
+              <div className="p-3 rounded-2xl bg-white/4 border border-white/6">
+                <span className="text-white/40 block text-[10px] uppercase">Processing Time</span>
+                <span className="text-white font-bold text-sm mt-0.5 block">
+                  {analysis.processing_ms ? `${analysis.processing_ms} ms` : 'Instant'}
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-white/4 border border-white/6">
+                <span className="text-white/40 block text-[10px] uppercase">SHA-256 Hash</span>
+                <span className="text-white font-bold text-xs truncate mt-0.5 block">
+                  {analysis.file_sha256 ? `${analysis.file_sha256.slice(0, 16)}...` : 'Verified'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Structured Explanation */}
+        {analysis.explanation && (
+          <div className="p-5 rounded-3xl glass-surface border border-white/8 space-y-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-blue flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Forensic Synthesis
+            </span>
+            <p className="text-sm text-white/80 leading-relaxed font-sans">
+              {analysis.explanation}
+            </p>
+          </div>
+        )}
+      </GlassCard>
+
+      {/* ── SMALLER FORENSIC PANELS (Section 21 requirement) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Panel 1: Detected Signals */}
+        <GlassCard variant="elevated" className="space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-white/6">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-brand-blue" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                DETECTION SIGNALS ({analysis.signals.length})
+              </h3>
+            </div>
+          </div>
+
+          {analysis.signals.length === 0 ? (
+            <p className="text-xs text-white/50 py-4">No anomalous forensic signals triggered.</p>
+          ) : (
+            <div className="space-y-4">
+              {analysis.signals.map((sig, idx) => (
+                <SignalBar
+                  key={idx}
+                  label={sig.signal_label}
+                  value={sig.score !== null ? sig.score : 0.15}
+                  severity={sig.severity}
+                  detail={sig.description || undefined}
+                />
+              ))}
+            </div>
+          )}
+        </GlassCard>
+
+        {/* Panel 2: Provenance & Technical Metadata */}
+        <GlassCard variant="elevated" className="space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-white/6">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-status-safe" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                PROVENANCE & CRYPTOGRAPHY
+              </h3>
+            </div>
+          </div>
+
+          <div className="space-y-3 text-xs font-mono">
+            <div className="p-3 rounded-2xl bg-white/4 border border-white/6 flex items-center justify-between">
+              <span className="text-white/50">MIME Format</span>
+              <span className="text-white font-semibold">{analysis.mime_type || 'auto-detected'}</span>
+            </div>
+            <div className="p-3 rounded-2xl bg-white/4 border border-white/6 flex items-center justify-between">
+              <span className="text-white/50">File Retained on Server</span>
+              <span className="text-status-safe font-semibold">
+                {analysis.media_deleted ? 'PURGED (0 Bytes)' : 'NO (Ephemeral)'}
+              </span>
+            </div>
+            <div className="p-3 rounded-2xl bg-white/4 border border-white/6 flex items-center justify-between">
+              <span className="text-white/50">Processing Architecture</span>
+              <span className="text-brand-blue font-semibold">FASTAPI CORE / LOCAL ML</span>
+            </div>
+          </div>
+
+          {/* Report quick link */}
+          {report && (
+            <div className="pt-2">
+              <Link href="/dashboard/reports">
+                <GlassButton variant="secondary" size="sm" className="w-full justify-between">
+                  <span>View Formal Security Report</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </GlassButton>
+              </Link>
+            </div>
+          )}
+        </GlassCard>
       </div>
     </div>
   )

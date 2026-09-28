@@ -1,26 +1,40 @@
 'use client'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, ArrowRight, Shield, Check } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, User, ArrowRight, Check, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { authApi, getErrorMessage } from '@/lib/api'
 
-interface RegisterForm { full_name: string; email: string; password: string; confirm: string }
+import { authApi, getErrorMessage } from '@/lib/api'
+import { BrandLogo } from '@/components/layout/BrandLogo'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { GlassButton } from '@/components/ui/GlassButton'
+
+interface RegisterForm {
+  full_name: string
+  email: string
+  password: string
+}
 
 export default function RegisterPage() {
   const router = useRouter()
-  const [showPw, setShowPw] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterForm>()
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<RegisterForm>()
+
   const password = watch('password', '')
 
-  const strength = [
-    { label: '8+ characters',    ok: password.length >= 8 },
-    { label: 'Uppercase letter', ok: /[A-Z]/.test(password) },
-    { label: 'Number',           ok: /[0-9]/.test(password) },
+  const strengthRules = [
+    { label: '8+ chars', met: password.length >= 8 },
+    { label: 'Uppercase', met: /[A-Z]/.test(password) },
+    { label: 'Number', met: /[0-9]/.test(password) },
   ]
 
   const onSubmit = async (data: RegisterForm) => {
@@ -28,7 +42,7 @@ export default function RegisterPage() {
     try {
       await authApi.register(data.email, data.password, data.full_name)
       await authApi.login(data.email, data.password)
-      toast.success('Account created. Welcome to Privacy Eye.')
+      toast.success('Account created! Welcome to Privacy Eye.')
       router.push('/dashboard')
     } catch (err) {
       toast.error(getErrorMessage(err))
@@ -38,108 +52,121 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2" style={{ background: '#0a0a0a' }}>
-      {/* Left panel */}
-      <div className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden" style={{ background: '#111111', borderRight: '1px solid rgba(255,255,255,0.04)' }}>
-        <div className="absolute inset-0 grid-overlay opacity-50" />
-        <Link href="/" className="flex items-center gap-3 relative z-10">
-          <div className="w-8 h-8 rounded flex items-center justify-center" style={{ background: '#dc2626' }}>
-            <Shield className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-display text-xl tracking-wider text-white">PRIVACY EYE</span>
-        </Link>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-canvas relative">
+      {/* Background ambient lighting */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-blue/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-brand-violet/10 rounded-full blur-[100px] pointer-events-none" />
 
-        <div className="relative z-10">
-          <h1 className="font-display text-white leading-none mb-6" style={{ fontSize: '5rem' }}>
-            JOIN THE<br />
-            <span style={{ color: '#dc2626' }}>DIGITAL<br />DEFENSE.</span>
-          </h1>
-          <div className="space-y-3 mt-8">
-            {['Free tier — 20 scans/month', 'No credit card required', 'Instant access to all scanners', 'AI-powered evidence reports'].map(f => (
-              <div key={f} className="flex items-center gap-3 text-sm" style={{ color: '#9ca3af' }}>
-                <Check className="w-4 h-4 flex-shrink-0" style={{ color: '#dc2626' }} />
-                {f}
-              </div>
-            ))}
-          </div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-md"
+      >
+        <div className="flex justify-center mb-8">
+          <BrandLogo size="lg" />
         </div>
 
-        <p className="text-xs relative z-10" style={{ color: '#374151' }}>
-          Results are probabilistic indicators only. Not legal advice.
-        </p>
-      </div>
+        <GlassCard variant="floating" className="p-8 md:p-10 space-y-6 border border-white/14">
+          <div className="text-center space-y-1">
+            <span className="text-xs uppercase font-mono tracking-widest text-brand-blue">
+              Autonomous Verification
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Create Account</h1>
+            <p className="text-xs text-white/50">Gain full access to real-time biometric defense</p>
+          </div>
 
-      {/* Right panel */}
-      <div className="flex items-center justify-center px-6 py-12">
-        <motion.div
-          className="w-full max-w-md"
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Link href="/" className="flex items-center gap-3 mb-10 lg:hidden">
-            <div className="w-7 h-7 rounded flex items-center justify-center" style={{ background: '#dc2626' }}>
-              <Shield className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-display text-lg tracking-wider text-white">PRIVACY EYE</span>
-          </Link>
-
-          <p className="section-label mb-3">Create Account</p>
-          <h2 className="text-3xl font-black text-white mb-8">Register</h2>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wide2 mb-2" style={{ color: '#9ca3af' }}>Full Name</label>
-              <input type="text" className="input-dark" placeholder="Jane Smith"
-                {...register('full_name', { required: 'Name is required' })} />
-              {errors.full_name && <p className="text-xs mt-1.5 font-medium" style={{ color: '#dc2626' }}>{errors.full_name.message}</p>}
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wide2 mb-2" style={{ color: '#9ca3af' }}>Email</label>
-              <input type="email" className="input-dark" placeholder="you@example.com"
-                {...register('email', { required: 'Email is required' })} />
-              {errors.email && <p className="text-xs mt-1.5 font-medium" style={{ color: '#dc2626' }}>{errors.email.message}</p>}
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wide2 mb-2" style={{ color: '#9ca3af' }}>Password</label>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-white/70">Full Name</label>
               <div className="relative">
-                <input type={showPw ? 'text' : 'password'} className="input-dark pr-11" placeholder="Min 8 chars"
-                  {...register('password', { required: 'Password is required', minLength: { value: 8, message: 'Min 8 characters' } })} />
-                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3.5 top-1/2 -translate-y-1/2" style={{ color: '#6b7280' }}>
-                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+                <input
+                  type="text"
+                  placeholder="Security Specialist"
+                  className="glass-input pl-11"
+                  {...register('full_name', { required: 'Name is required' })}
+                />
               </div>
-              {password && (
-                <div className="mt-2 flex gap-3 flex-wrap">
-                  {strength.map(s => (
-                    <div key={s.label} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: s.ok ? '#10b981' : '#4b5563' }}>
-                      <Check className="w-3 h-3" /> {s.label}
-                    </div>
-                  ))}
-                </div>
+              {errors.full_name && (
+                <p className="text-xs text-status-danger">{errors.full_name.message}</p>
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wide2 mb-2" style={{ color: '#9ca3af' }}>Confirm Password</label>
-              <input type="password" className="input-dark" placeholder="••••••••"
-                {...register('confirm', { required: true, validate: v => v === password || 'Passwords do not match' })} />
-              {errors.confirm && <p className="text-xs mt-1.5 font-medium" style={{ color: '#dc2626' }}>{errors.confirm.message}</p>}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-white/70">Work Email</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+                <input
+                  type="email"
+                  placeholder="specialist@agency.gov"
+                  className="glass-input pl-11"
+                  {...register('email', { required: 'Email address is required' })}
+                />
+              </div>
+              {errors.email && (
+                <p className="text-xs text-status-danger">{errors.email.message}</p>
+              )}
             </div>
 
-            <button type="submit" disabled={loading} className="btn-red w-full justify-center mt-2" style={{ width: '100%' }}>
-              {loading ? <><span className="spinner w-4 h-4" style={{ borderTopColor: '#fff' }} /> Creating account…</> : <>Create Account <ArrowRight className="w-4 h-4" /></>}
-            </button>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-white/70">Password</label>
+              <div className="relative">
+                <Lock className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••••••"
+                  className="glass-input pl-11 pr-11"
+                  {...register('password', {
+                    required: 'Password is required',
+                    minLength: { value: 8, message: 'Minimum 8 characters' },
+                  })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Password strength tags */}
+              <div className="flex gap-2 pt-1">
+                {strengthRules.map((rule, idx) => (
+                  <span
+                    key={idx}
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                      rule.met ? 'bg-status-safe/15 text-status-safe' : 'bg-white/5 text-white/30'
+                    }`}
+                  >
+                    <Check className={`w-3 h-3 ${rule.met ? 'opacity-100' : 'opacity-0'}`} />
+                    {rule.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <GlassButton
+              type="submit"
+              variant="primary"
+              size="lg"
+              isLoading={loading}
+              className="w-full shadow-glow-blue mt-2"
+              icon={<ArrowRight className="w-4 h-4" />}
+            >
+              Register & Initialize
+            </GlassButton>
           </form>
 
-          <p className="text-center text-sm mt-8" style={{ color: '#6b7280' }}>
-            Already have an account?{' '}
-            <Link href="/auth/login" className="font-bold transition-colors hover:text-white" style={{ color: '#dc2626' }}>Sign in</Link>
-          </p>
-        </motion.div>
-      </div>
+          <div className="pt-4 border-t border-white/6 text-center text-xs text-white/50">
+            Already have an active key?{' '}
+            <Link href="/auth/login" className="text-brand-blue font-semibold hover:underline">
+              Sign In
+            </Link>
+          </div>
+        </GlassCard>
+      </motion.div>
     </div>
   )
 }

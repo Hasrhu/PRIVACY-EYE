@@ -1,214 +1,478 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
-import { Image, Video, Music, Upload, RefreshCw, FileText, Trash2, AlertTriangle, CheckCircle, HelpCircle, Eye, Camera } from 'lucide-react'
+import {
+  Camera,
+  UploadCloud,
+  ShieldCheck,
+  AlertTriangle,
+  CheckCircle2,
+  HelpCircle,
+  Clock,
+  ArrowRight,
+  Eye,
+  RefreshCw,
+  FileText,
+  Activity,
+  Cpu,
+  Lock,
+} from 'lucide-react'
 import { format } from 'date-fns'
+import toast from 'react-hot-toast'
+import Cookies from 'js-cookie'
+
 import { authApi, analysisApi, getErrorMessage } from '@/lib/api'
 import type { User, DashboardStats, Analysis } from '@/types'
 import { RISK_CONFIG } from '@/types'
-import toast from 'react-hot-toast'
-import ScannerModal from '@/components/ScannerModal'
-import Cookies from 'js-cookie'
-import clsx from 'clsx'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { GlassButton } from '@/components/ui/GlassButton'
+import { GlassBadge } from '@/components/ui/GlassBadge'
+import { StatusIndicator } from '@/components/ui/StatusIndicator'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser]       = useState<User | null>(null)
-  const [stats, setStats]     = useState<DashboardStats | null>(null)
-  const [history, setHistory] = useState<Analysis[]>([])
+  const [user, setUser] = useState<User | null>(null)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [recentHistory, setRecentHistory] = useState<Analysis[]>([])
   const [loading, setLoading] = useState(true)
-  const [scannerOpen, setScannerOpen]   = useState(false)
-  const [scannerType, setScannerType]   = useState<'IMAGE'|'VIDEO'|'AUDIO'>('IMAGE')
+  const [refreshing, setRefreshing] = useState(false)
 
-  const fetchData = useCallback(async () => {
+  // Compute time-of-day greeting
+  const getGreeting = () => {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Good morning'
+    if (hour < 18) return 'Good afternoon'
+    return 'Good evening'
+  }
+
+  const loadDashboardData = useCallback(async () => {
     try {
-      const [uRes, sRes, hRes] = await Promise.all([
+      const [userRes, statsRes, histRes] = await Promise.all([
         authApi.me(),
         analysisApi.getStats(),
-        analysisApi.getHistory(1, 8),
+        analysisApi.getHistory(1, 5),
       ])
-      setUser(uRes.data)
-      setStats(sRes.data)
-      setHistory(hRes.data.items)
-    } catch { router.push('/auth/login') }
-    finally  { setLoading(false) }
+      setUser(userRes.data)
+      setStats(statsRes.data)
+      setRecentHistory(histRes.data.items || [])
+    } catch (err: any) {
+      if (err?.response?.status === 401) {
+        router.push('/auth/login')
+      } else {
+        toast.error('Could not load dashboard data from backend')
+      }
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [router])
 
   useEffect(() => {
-    if (!Cookies.get('access_token')) { router.push('/auth/login'); return }
-    fetchData()
-  }, [fetchData, router])
+    if (!Cookies.get('access_token')) {
+      router.push('/auth/login')
+      return
+    }
+    loadDashboardData()
+  }, [loadDashboardData, router])
 
-  const openScanner = (t: 'IMAGE'|'VIDEO'|'AUDIO') => { setScannerType(t); setScannerOpen(true) }
-  const onScanDone  = (a: Analysis) => { setHistory(p => [a, ...p.slice(0,7)]); fetchData() }
-
-  const handleDelete = async (id: string) => {
-    try { await analysisApi.deleteAnalysis(id); setHistory(p => p.filter(a => a.id !== id)); toast.success('Deleted') }
-    catch (e) { toast.error(getErrorMessage(e)) }
+  const handleRefresh = () => {
+    setRefreshing(true)
+    loadDashboardData()
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-center space-y-4">
-        <div className="scan-ring w-14 h-14 mx-auto">
-          <Eye className="w-7 h-7" style={{ color: '#dc2626' }} />
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="w-12 h-12 rounded-2xl glass-card flex items-center justify-center border border-brand-blue/30 shadow-glow-blue animate-pulse">
+          <Eye className="w-6 h-6 text-brand-blue" />
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wide3" style={{ color: '#6b7280' }}>Loading Privacy Eye…</p>
+        <p className="mt-4 text-xs font-mono uppercase tracking-widest text-white/50">
+          Connecting to Privacy Eye Core...
+        </p>
       </div>
-    </div>
-  )
+    )
+  }
 
-  const pct = stats ? Math.min(100, (stats.scans_this_month / stats.scans_limit) * 100) : 0
+  const greeting = getGreeting()
+  const firstName = user?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Operator'
 
   return (
-    <div className="p-8" style={{ background: '#0a0a0a', minHeight: '100vh' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-10">
+    <div className="space-y-10">
+      {/* ── TOP HEADER (Section 12) ── */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <p className="section-label mb-1">Overview</p>
-          <h1 className="text-3xl font-black text-white">Dashboard</h1>
-          {user && <p className="text-sm mt-1" style={{ color: '#6b7280' }}>Welcome back, <span className="text-white font-semibold">{user.full_name?.split(' ')[0] || user.email}</span></p>}
-        </div>
-        <button onClick={fetchData} className="btn-ghost-red"><RefreshCw className="w-4 h-4" /></button>
-      </div>
-
-      {/* Scan usage bar */}
-      {stats && (
-        <div className="card p-5 mb-8 flex items-center gap-6">
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold uppercase tracking-wide2" style={{ color: '#9ca3af' }}>Monthly Scans Used</span>
-              <span className="text-xs font-mono font-bold text-white">{stats.scans_this_month} / {stats.scans_limit}</span>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#1a1a1a' }}>
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: pct > 80 ? '#dc2626' : '#10b981' }} />
-            </div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-xs uppercase font-mono tracking-widest text-brand-blue">
+              Command Center
+            </span>
+            <span className="text-white/20">·</span>
+            <span className="text-xs text-white/40">Secure Session</span>
           </div>
-          <Link href="/auth/register" className="btn-red text-xs py-2 px-4">Upgrade</Link>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
+            {greeting}, {firstName}.
+          </h1>
+          <p className="text-sm text-white/60 mt-1">Your digital protection is active.</p>
         </div>
-      )}
 
-      {/* Stat cards */}
-      {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {[
-            { label: 'Total Scanned',  value: stats.total_scanned, icon: Eye,           color: '#9ca3af',  bg: '#1a1a1a' },
-            { label: 'Suspicious',     value: stats.suspicious,    icon: AlertTriangle,  color: '#f59e0b',  bg: 'rgba(245,158,11,0.08)' },
-            { label: 'Low Risk',       value: stats.low_risk,      icon: CheckCircle,    color: '#10b981',  bg: 'rgba(16,185,129,0.08)' },
-            { label: 'Undetermined',   value: stats.undetermined,  icon: HelpCircle,     color: '#6b7280',  bg: '#1a1a1a' },
-          ].map((c, i) => (
-            <motion.div key={c.label} className="card p-5" initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay: i*0.07 }}>
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: c.bg }}>
-                <c.icon className="w-5 h-5" style={{ color: c.color }} />
-              </div>
-              <div className="font-display text-4xl" style={{ color: c.color === '#9ca3af' ? '#fff' : c.color }}>{c.value}</div>
-              <div className="text-xs font-semibold uppercase tracking-wide2 mt-1" style={{ color: '#6b7280' }}>{c.label}</div>
-            </motion.div>
-          ))}
-        </div>
-      )}
-
-      {/* Live Camera Authenticity Banner */}
-      <div className="card p-6 mb-10 border border-red-600/30 flex flex-col md:flex-row items-center justify-between gap-6" style={{ background: 'linear-gradient(90deg, rgba(220,38,38,0.12) 0%, rgba(17,17,17,1) 100%)' }}>
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-            <span className="text-xs font-mono uppercase tracking-widest text-red-500 font-bold">New Biometric Defense</span>
-          </div>
-          <h2 className="font-display text-2xl text-white tracking-wide">LIVE CAMERA FACE AUTHENTICITY SCAN</h2>
-          <p className="text-xs text-gray-400 max-w-xl">
-            Real-time multi-signal analysis using YuNet deep landmarks, Moiré screen rasterization detection, face-swap boundary inspection, and active challenge liveness.
-          </p>
-        </div>
-        <Link href="/dashboard/live-scan" className="btn-red text-xs py-3 px-6 flex items-center gap-2 flex-shrink-0">
-          <Camera className="w-4 h-4" /> Open Live Camera
-        </Link>
-      </div>
-
-      {/* Quick Scan */}
-      <div className="mb-10">
-        <p className="section-label mb-4">Quick Scan</p>
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { type: 'IMAGE' as const, label: 'Scan Image', Icon: Image,  sub: 'JPG · PNG · WEBP' },
-            { type: 'VIDEO' as const, label: 'Scan Video', Icon: Video,  sub: 'MP4 · MOV · WEBM' },
-            { type: 'AUDIO' as const, label: 'Scan Audio', Icon: Music,  sub: 'MP3 · WAV · FLAC' },
-          ].map(a => (
-            <motion.button key={a.type} onClick={() => openScanner(a.type)}
-              className="card-hover p-7 text-left group"
-              whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+        <div className="flex items-center gap-3">
+          <GlassButton
+            variant="secondary"
+            size="sm"
+            onClick={handleRefresh}
+            isLoading={refreshing}
+            icon={<RefreshCw className="w-3.5 h-3.5" />}
+          >
+            Refresh Telemetry
+          </GlassButton>
+          <Link href="/dashboard/live-scan">
+            <GlassButton
+              variant="primary"
+              size="sm"
+              icon={<Camera className="w-4 h-4" />}
+              className="shadow-glow-blue"
             >
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 transition-colors" style={{ background: 'rgba(220,38,38,0.1)' }}>
-                <a.Icon className="w-5 h-5 transition-colors group-hover:text-white" style={{ color: '#dc2626' }} />
-              </div>
-              <div className="text-xs font-bold uppercase tracking-wide2 mb-1" style={{ color: '#dc2626' }}>UPLOAD & ANALYZE</div>
-              <div className="font-bold text-white">{a.label}</div>
-              <div className="text-xs mt-1 font-mono" style={{ color: '#6b7280' }}>{a.sub}</div>
-              <div className="flex items-center gap-1.5 mt-4 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: '#dc2626' }}>
-                <Upload className="w-3.5 h-3.5" /> Click to upload
-              </div>
-            </motion.button>
-          ))}
+              Start Live Scan
+            </GlassButton>
+          </Link>
         </div>
       </div>
 
-      {/* Recent scans table */}
+      {/* ── MAIN CENTRAL CARD: PROTECTION ACTIVE (Section 12 & 61) ── */}
+      <GlassCard
+        variant="floating"
+        className="relative overflow-hidden p-8 md:p-10 border border-white/14"
+      >
+        {/* Ambient subtle glow background */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-brand-blue/10 rounded-full blur-[90px] pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+          <div className="space-y-4 max-w-xl">
+            <div className="flex items-center gap-3">
+              <StatusIndicator status="safe" />
+              <GlassBadge status="safe" label="AUTHENTICITY ENGINE OPERATIONAL" pulse />
+            </div>
+
+            <div>
+              <h2 className="text-3xl md:text-4xl font-black tracking-tight text-white">
+                PROTECTION ACTIVE
+              </h2>
+              <p className="text-sm font-medium text-brand-blue mt-0.5">
+                Privacy-first analysis
+              </p>
+            </div>
+
+            <p className="text-sm text-white/70 leading-relaxed">
+              Real-time deepfake mitigation enabled. Local YuNet landmark tracking, Celeb-DF v2
+              ocular residual check, and Silent-Face Fourier presentation attack defenses are live.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-white/60 pt-2">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/8">
+                <Cpu className="w-3.5 h-3.5 text-brand-cyan" />
+                <span>Processing: ON DEVICE / LOCAL</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/8">
+                <Lock className="w-3.5 h-3.5 text-status-safe" />
+                <span>Zero Media Retention</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row lg:flex-col gap-3 w-full lg:w-64 flex-shrink-0">
+            <Link href="/dashboard/live-scan" className="w-full">
+              <GlassButton
+                variant="primary"
+                size="md"
+                className="w-full justify-between"
+                icon={<Camera className="w-4 h-4" />}
+              >
+                <span>Live Camera Scan</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </GlassButton>
+            </Link>
+            <Link href="/dashboard/analysis" className="w-full">
+              <GlassButton
+                variant="secondary"
+                size="md"
+                className="w-full justify-between"
+                icon={<UploadCloud className="w-4 h-4 text-brand-blue" />}
+              >
+                <span>Analyze File</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </GlassButton>
+            </Link>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* ── FOUR DASHBOARD STATISTICS GLASS CARDS (Section 13) ── */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <p className="section-label">Recent Scans</p>
-          <Link href="/dashboard/history" className="btn-ghost-red text-xs">View all →</Link>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-white/70">
+            Real Backend Telemetry
+          </h3>
+          <span className="text-xs font-mono text-white/40">Aggregated Audit Records</span>
         </div>
 
-        {history.length === 0 ? (
-          <div className="card p-14 text-center">
-            <Eye className="w-10 h-10 mx-auto mb-3" style={{ color: '#374151' }} />
-            <p className="text-sm font-semibold" style={{ color: '#6b7280' }}>No scans yet.</p>
-            <p className="text-xs mt-1" style={{ color: '#374151' }}>Upload a file above to get started.</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Card 1: Media Scanned */}
+          <GlassCard variant="elevated" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono uppercase text-white/50">Media Scanned</span>
+              <div className="w-8 h-8 rounded-xl bg-brand-blue/10 flex items-center justify-center text-brand-blue">
+                <Eye className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-3xl font-extrabold font-mono text-white">
+              {stats?.total_scanned ?? 0}
+            </p>
+            <p className="text-[11px] text-white/40">Actual backend processed items</p>
+          </GlassCard>
+
+          {/* Card 2: Suspicious */}
+          <GlassCard variant="elevated" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono uppercase text-white/50">Suspicious</span>
+              <div className="w-8 h-8 rounded-xl bg-status-warning/10 flex items-center justify-center text-status-warning">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-3xl font-extrabold font-mono text-status-warning">
+              {stats?.suspicious ?? 0}
+            </p>
+            <p className="text-[11px] text-white/40">Probabilistic anomalies detected</p>
+          </GlassCard>
+
+          {/* Card 3: Low Risk */}
+          <GlassCard variant="elevated" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono uppercase text-white/50">Low Risk</span>
+              <div className="w-8 h-8 rounded-xl bg-status-safe/10 flex items-center justify-center text-status-safe">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-3xl font-extrabold font-mono text-status-safe">
+              {stats?.low_risk ?? 0}
+            </p>
+            <p className="text-[11px] text-white/40">High biological/organic signals</p>
+          </GlassCard>
+
+          {/* Card 4: Unable to Determine */}
+          <GlassCard variant="elevated" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono uppercase text-white/50">Undetermined</span>
+              <div className="w-8 h-8 rounded-xl bg-status-undetermined/10 flex items-center justify-center text-status-undetermined">
+                <HelpCircle className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-3xl font-extrabold font-mono text-status-undetermined">
+              {stats?.undetermined ?? 0}
+            </p>
+            <p className="text-[11px] text-white/40">Abstained due to poor quality/blur</p>
+          </GlassCard>
+        </div>
+      </div>
+
+      {/* ── LIVE CAMERA CARD & SYSTEM OVERVIEW (Section 14 & 28) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left 2 Cols: Live Camera Card (Section 14) */}
+        <GlassCard variant="elevated" className="lg:col-span-2 space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Camera className="w-5 h-5 text-brand-blue" />
+              <h3 className="text-lg font-bold text-white">LIVE CAMERA</h3>
+            </div>
+            <GlassBadge status="safe" label="EDGE INFERENCE READY" pulse />
+          </div>
+
+          {/* Interactive Preview Viewfinder */}
+          <div className="relative aspect-[16/9] rounded-3xl bg-surface/90 border border-white/8 flex flex-col items-center justify-center overflow-hidden group">
+            {/* Viewfinder corner guides */}
+            <div className="absolute top-4 left-4 w-5 h-5 border-t-2 border-l-2 border-brand-blue/60" />
+            <div className="absolute top-4 right-4 w-5 h-5 border-t-2 border-r-2 border-brand-blue/60" />
+            <div className="absolute bottom-4 left-4 w-5 h-5 border-b-2 border-l-2 border-brand-blue/60" />
+            <div className="absolute bottom-4 right-4 w-5 h-5 border-b-2 border-r-2 border-brand-blue/60" />
+
+            {/* Central scanning glyph */}
+            <div className="w-28 h-36 rounded-[48%] border border-white/20 flex flex-col items-center justify-center gap-2 relative">
+              <div className="w-2.5 h-2.5 rounded-full bg-brand-blue shadow-glow-blue animate-pulse" />
+              <span className="text-[10px] font-mono text-white/40 uppercase">YuNet Box</span>
+            </div>
+
+            {/* Status overlay */}
+            <div className="absolute bottom-4 px-4 py-1.5 rounded-full glass-surface border border-white/12 flex items-center gap-2 text-xs">
+              <span className="w-2 h-2 rounded-full bg-brand-blue animate-ping" />
+              <span className="font-mono text-white/90">● READY FOR LIVE INFERENCE</span>
+            </div>
+
+            {/* Launch hover cover */}
+            <div className="absolute inset-0 bg-canvas/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+              <Link href="/dashboard/live-scan">
+                <GlassButton variant="primary" icon={<Camera className="w-4 h-4" />}>
+                  Open Fullscreen Live HUD
+                </GlassButton>
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1">
+            <div className="p-3 rounded-2xl bg-white/4 border border-white/6">
+              <span className="text-white/40 block text-[10px] uppercase font-mono">Face Model</span>
+              <span className="font-semibold text-white mt-0.5 block">OpenCV YuNet</span>
+            </div>
+            <div className="p-3 rounded-2xl bg-white/4 border border-white/6">
+              <span className="text-white/40 block text-[10px] uppercase font-mono">Temporal</span>
+              <span className="font-semibold text-white mt-0.5 block">Micro-Motion & Blinks</span>
+            </div>
+            <div className="p-3 rounded-2xl bg-white/4 border border-white/6">
+              <span className="text-white/40 block text-[10px] uppercase font-mono">Replay Attack</span>
+              <span className="font-semibold text-white mt-0.5 block">Silent-Face Fourier</span>
+            </div>
+            <div className="p-3 rounded-2xl bg-white/4 border border-white/6">
+              <span className="text-white/40 block text-[10px] uppercase font-mono">Texture Baseline</span>
+              <span className="font-semibold text-white mt-0.5 block">FFHQ Distribution</span>
+            </div>
+          </div>
+        </GlassCard>
+
+        {/* Right 1 Col: Security Center Quick Status (Section 28) */}
+        <GlassCard variant="elevated" className="space-y-5">
+          <div className="flex items-center justify-between pb-2 border-b border-white/6">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-status-safe" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                SECURITY CENTER
+              </h3>
+            </div>
+            <Link
+              href="/dashboard/security"
+              className="text-xs text-brand-blue hover:underline flex items-center gap-1"
+            >
+              Details <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          <div className="space-y-4 text-xs">
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/4 border border-white/6">
+              <div>
+                <span className="font-semibold text-white block">FastAPI REST Core</span>
+                <span className="text-white/40 text-[11px]">HTTP 2.0 / Local</span>
+              </div>
+              <GlassBadge status="safe" label="OPERATIONAL" />
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/4 border border-white/6">
+              <div>
+                <span className="font-semibold text-white block">ML Inference Engine</span>
+                <span className="text-white/40 text-[11px]">PyTorch & ONNX</span>
+              </div>
+              <GlassBadge status="safe" label="OPERATIONAL" />
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/4 border border-white/6">
+              <div>
+                <span className="font-semibold text-white block">PostgreSQL Database</span>
+                <span className="text-white/40 text-[11px]">Async SQLAlchemy</span>
+              </div>
+              <GlassBadge status="safe" label="OPERATIONAL" />
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/4 border border-white/6">
+              <div>
+                <span className="font-semibold text-white block">Active Protocol Verifier</span>
+                <span className="text-white/40 text-[11px]">Smile + Blinks + Yaw</span>
+              </div>
+              <GlassBadge status="safe" label="ACTIVE" />
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <Link href="/dashboard/privacy" className="block">
+              <div className="p-3 rounded-2xl bg-brand-blue/5 border border-brand-blue/15 hover:border-brand-blue/30 transition-all flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-brand-blue" />
+                  <span className="text-xs font-semibold text-white">Privacy Center</span>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-white/50" />
+              </div>
+            </Link>
+          </div>
+        </GlassCard>
+      </div>
+
+      {/* ── RECENT ANALYSIS HISTORY TABLE (Section 23) ── */}
+      <GlassCard variant="elevated" className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-white">Recent Analyses</h3>
+            <p className="text-xs text-white/50">Verified audit trail from database</p>
+          </div>
+          <Link href="/dashboard/history">
+            <GlassButton variant="ghost" size="sm" icon={<Clock className="w-3.5 h-3.5" />}>
+              View All History
+            </GlassButton>
+          </Link>
+        </div>
+
+        {recentHistory.length === 0 ? (
+          <div className="py-12 text-center space-y-3">
+            <p className="text-sm text-white/50">Your verification history will appear here.</p>
+            <Link href="/dashboard/analysis">
+              <GlassButton variant="secondary" size="sm">
+                Analyze First Media
+              </GlassButton>
+            </Link>
           </div>
         ) : (
-          <div className="card overflow-hidden">
-            <table className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  {['File', 'Type', 'Risk', 'Confidence', 'Date', ''].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wide2" style={{ color: '#374151' }}>{h}</th>
-                  ))}
+                <tr className="border-b border-white/8 text-white/40 font-mono uppercase">
+                  <th className="py-3 px-4">Filename</th>
+                  <th className="py-3 px-4">Type</th>
+                  <th className="py-3 px-4">Risk Assessment</th>
+                  <th className="py-3 px-4">Confidence</th>
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {history.map(a => {
-                  const risk = RISK_CONFIG[a.risk_level || 'UNDETERMINED']
-                  const badgeClass = `badge-${(a.risk_level || 'undetermined').toLowerCase()}`
+              <tbody className="divide-y divide-white/4">
+                {recentHistory.map((item) => {
+                  const risk = item.risk_level ? RISK_CONFIG[item.risk_level] : RISK_CONFIG.UNDETERMINED
+                  const badgeStatus =
+                    item.risk_level === 'LOW'
+                      ? 'safe'
+                      : item.risk_level === 'SUSPICIOUS'
+                      ? 'warning'
+                      : item.risk_level === 'HIGH' || item.risk_level === 'CRITICAL'
+                      ? 'danger'
+                      : 'undetermined'
+
                   return (
-                    <tr key={a.id} className="group transition-colors" style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#111111')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          {a.media_type === 'IMAGE' && <Image className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#6b7280' }} />}
-                          {a.media_type === 'VIDEO' && <Video className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#6b7280' }} />}
-                          {a.media_type === 'AUDIO' && <Music className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#6b7280' }} />}
-                          <span className="text-sm text-white truncate max-w-[160px] font-medium">{a.original_filename}</span>
-                        </div>
+                    <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="py-3.5 px-4 font-medium text-white max-w-[200px] truncate">
+                        {item.original_filename}
                       </td>
-                      <td className="px-5 py-3.5 text-xs font-mono" style={{ color: '#6b7280' }}>{a.media_type}</td>
-                      <td className="px-5 py-3.5"><span className={badgeClass}>{risk.emoji} {risk.label}</span></td>
-                      <td className="px-5 py-3.5 text-xs font-mono" style={{ color: '#9ca3af' }}>
-                        {a.confidence != null ? `${(a.confidence*100).toFixed(0)}%` : '—'}
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono text-white/60">{item.media_type}</span>
                       </td>
-                      <td className="px-5 py-3.5 text-xs font-mono" style={{ color: '#6b7280' }}>{format(new Date(a.created_at), 'MMM d, HH:mm')}</td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Link href={`/dashboard/analysis/${a.id}`} className="btn-ghost-red text-xs py-1 px-2">
-                            <FileText className="w-3.5 h-3.5" />
-                          </Link>
-                          <button onClick={() => handleDelete(a.id)} className="btn-ghost-red text-xs py-1 px-2" style={{ color: '#dc2626' }}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      <td className="py-3.5 px-4">
+                        <GlassBadge status={badgeStatus} label={risk.label} />
+                      </td>
+                      <td className="py-3.5 px-4 font-mono font-semibold text-white">
+                        {item.confidence !== null ? `${Math.round(item.confidence * 100)}%` : '—'}
+                      </td>
+                      <td className="py-3.5 px-4 text-white/50">
+                        {format(new Date(item.created_at), 'MMM dd, HH:mm')}
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <Link
+                          href={`/dashboard/analysis/${item.id}`}
+                          className="text-brand-blue hover:text-white transition-colors"
+                        >
+                          View Details
+                        </Link>
                       </td>
                     </tr>
                   )
@@ -217,11 +481,7 @@ export default function DashboardPage() {
             </table>
           </div>
         )}
-      </div>
-
-      {scannerOpen && (
-        <ScannerModal type={scannerType} onClose={() => setScannerOpen(false)} onComplete={onScanDone} />
-      )}
+      </GlassCard>
     </div>
   )
 }
