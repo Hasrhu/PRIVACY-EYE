@@ -55,7 +55,7 @@ export default function DeveloperPage() {
         </div>
 
         <a
-          href="http://127.0.0.1:8000/docs"
+          href={process.env.NEXT_PUBLIC_API_DOCS_URL || ((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/api\/v1\/?$/, '') + '/docs')}
           target="_blank"
           rel="noreferrer"
         >
