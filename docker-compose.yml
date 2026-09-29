@@ -1,23 +1,28 @@
+# ==============================================================================
+# Privacy Eye — Local & Multi-Container Development Orchestration
+# ==============================================================================
+version: "3.8"
+
 services:
-  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  # ── PostgreSQL Database ─────────────────────────────────────────────────────
   db:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER:     privacyeye
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB:       privacyeye_db
+      POSTGRES_USER: ${POSTGRES_USER:-privacyeye}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-privacyeye_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-privacyeye_db}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test:     ["CMD-SHELL", "pg_isready -U privacyeye"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-privacyeye} -d ${POSTGRES_DB:-privacyeye_db}"]
       interval: 10s
-      timeout:  5s
-      retries:  5
+      timeout: 5s
+      retries: 5
 
-  # ── FastAPI Backend ───────────────────────────────────────────────────────
+  # ── FastAPI Backend ─────────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -26,26 +31,27 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL:     postgresql+asyncpg://privacyeye:password@db:5432/privacyeye_db
-      DATABASE_URL_SYNC: postgresql://privacyeye:password@db:5432/privacyeye_db
-      APP_ENV:          development
-      APP_SECRET_KEY:   change-me-in-production-32-chars-min
-      JWT_SECRET_KEY:   change-me-jwt-32-chars-min-dev-key
-      GEMINI_API_KEY:   ${GEMINI_API_KEY:-}
-      ML_DEVICE:        cpu
+      APP_ENV: development
+      APP_SECRET_KEY: ${APP_SECRET_KEY:-local-dev-secret-key-32-chars-long}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-local-dev-jwt-secret-key-32-chars-long}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-privacyeye}:${POSTGRES_PASSWORD:-privacyeye_secret}@db:5432/${POSTGRES_DB:-privacyeye_db}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-privacyeye}:${POSTGRES_PASSWORD:-privacyeye_secret}@db:5432/${POSTGRES_DB:-privacyeye_db}
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      MODEL_REPOSITORY: ${MODEL_REPOSITORY:-privacy-eye/privacy-eye-models}
+      MODEL_REVISION: ${MODEL_REVISION:-main}
+      MODEL_CACHE_DIR: /app/models_cache
+      HF_TOKEN: ${HF_TOKEN:-}
+      AUTO_DOWNLOAD_MODELS: "true"
+      ML_DEVICE: cpu
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     volumes:
       - ./backend:/app
-      - ml_weights:/app/../ml/weights
+      - model_cache:/app/models_cache
     depends_on:
       db:
         condition: service_healthy
-    command: >
-      sh -c "
-        alembic upgrade head &&
-        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-      "
 
-  # ── Next.js Frontend ──────────────────────────────────────────────────────
+  # ── Next.js Frontend ────────────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -55,9 +61,10 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+      NEXT_PUBLIC_APP_NAME: Privacy Eye
     depends_on:
       - backend
 
 volumes:
   postgres_data:
-  ml_weights:
+  model_cache:

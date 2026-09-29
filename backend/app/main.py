@@ -48,16 +48,22 @@ app = FastAPI(
 # ── Middleware ──────────────────────────────────────────────────────────────
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(RateLimitMiddleware, calls=settings.RATE_LIMIT_PER_MINUTE, period=60)
+
+cors_origins = settings.CORS_ORIGINS
+if isinstance(cors_origins, str):
+    cors_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https?://.*",
+    allow_origins=cors_origins if settings.APP_ENV == "production" else ["*"],
+    allow_origin_regex=None if settings.APP_ENV == "production" else r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["*"],  # Restrict in production
+    allowed_hosts=["*"],  # Restrict in production via proxy/ingress
 )
 
 # ── Routes ──────────────────────────────────────────────────────────────────
@@ -69,10 +75,47 @@ async def root():
     return {"service": "Privacy Eye API", "status": "operational", "version": settings.APP_VERSION}
 
 
+@app.get("/health", tags=["Health"])
 @app.get("/api/v1/health", tags=["Health"])
 async def health():
     return {
         "status": "healthy",
         "version": settings.APP_VERSION,
-        "env": settings.APP_ENV,
+        "environment": settings.APP_ENV,
     }
+
+
+@app.get("/ready", tags=["Health"])
+@app.get("/api/v1/ready", tags=["Health"])
+async def ready():
+    from sqlalchemy import text
+    from app.services.model_manager import model_manager
+
+    # 1. Database readiness check
+    db_status = "INITIALIZING"
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+            db_status = "READY"
+    except Exception as e:
+        logger.warning("Readiness probe: database connection degraded", error=str(e))
+        db_status = "DEGRADED"
+
+    # 2. ML Engine readiness
+    ml_status = model_manager.get_model_status()
+    engine_ready = ml_status.get("ml_engine_status", "DEGRADED_FORENSICS")
+
+    overall_status = "ready" if (db_status == "READY" and engine_ready in ("READY", "DEGRADED_FORENSICS")) else "degraded"
+
+    return {
+        "status": overall_status,
+        "api": "READY",
+        "database": db_status,
+        "models": engine_ready,
+        "details": {
+            "device": ml_status.get("device", "cpu"),
+            "repository": ml_status.get("repository"),
+            "models_count": ml_status.get("models_count", 0),
+        },
+    }
+
