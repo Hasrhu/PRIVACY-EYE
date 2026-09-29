@@ -44,9 +44,14 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 30
     RATE_LIMIT_UPLOADS_PER_HOUR: int = 20
 
-    # ML
-    ML_MODELS_DIR: str = "../ml/weights"
+    # ML & Model Storage (Hugging Face Hub)
+    ML_MODELS_DIR: str = "app/ml/weights"
     ML_DEVICE: str = "cpu"
+    MODEL_REPOSITORY: str = "privacy-eye/privacy-eye-models"
+    MODEL_REVISION: str = "main"
+    MODEL_CACHE_DIR: str = "./models_cache"
+    HF_TOKEN: str = ""
+    AUTO_DOWNLOAD_MODELS: bool = True
 
     @property
     def max_image_bytes(self) -> int:
@@ -62,6 +67,7 @@ class Settings(BaseSettings):
 
     def ensure_temp_dir(self) -> None:
         os.makedirs(self.TEMP_UPLOAD_DIR, exist_ok=True)
+        os.makedirs(self.MODEL_CACHE_DIR, exist_ok=True)
 
 
 settings = Settings()

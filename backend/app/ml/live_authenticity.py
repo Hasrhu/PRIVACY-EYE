@@ -60,18 +60,43 @@ class LiveAuthenticityEngine:
 
     def _init_detector(self):
         try:
-            self._detector = cv2.FaceDetectorYN.create(
-                self.model_path,
-                "",
-                (320, 320),
-                score_threshold=0.55,
-                nms_threshold=0.3,
-                top_k=5,
-            )
-            logger.info("YuNet face detector initialized successfully")
+            from pathlib import Path
+            target_path = Path(self.model_path)
+            if not target_path.exists():
+                try:
+                    from app.services.model_manager import model_manager
+                    resolved = model_manager._find_model_file("face_detection_yunet.onnx")
+                    if resolved and resolved.exists():
+                        target_path = resolved
+                except Exception:
+                    pass
+
+            if target_path.exists():
+                self._detector = cv2.FaceDetectorYN.create(
+                    str(target_path),
+                    "",
+                    (320, 320),
+                    score_threshold=0.55,
+                    nms_threshold=0.3,
+                    top_k=5,
+                )
+                logger.info("YuNet face detector initialized successfully", path=str(target_path))
+            else:
+                logger.warning("YuNet onnx model not found, cascade fallback active")
+                self._detector = None
         except Exception as e:
             logger.error("Failed to initialize YuNet face detector", error=str(e))
             self._detector = None
+
+        try:
+            from pathlib import Path
+            cascade_path = Path(__file__).parent / "weights" / "haarcascade_frontalface_default.xml"
+            if cascade_path.exists():
+                self._cascade_detector = cv2.CascadeClassifier(str(cascade_path))
+            else:
+                self._cascade_detector = None
+        except Exception:
+            self._cascade_detector = None
 
     # ── 1. Frame Quality & Grid Blur Check ─────────────────────────────────────
     def check_frame_quality(
@@ -187,6 +212,26 @@ class LiveAuthenticityEngine:
         Executes YuNet face detector. Returns bounding box, 5 landmarks, and score.
         """
         if self._detector is None:
+            if getattr(self, "_cascade_detector", None) is not None:
+                gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+                faces = self._cascade_detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(60, 60))
+                if len(faces) == 0:
+                    return None
+                best = max(faces, key=lambda b: b[2] * b[3])
+                fx, fy, fw, fh = [int(v) for v in best]
+                landmarks = {
+                    "right_eye": [int(fx + fw * 0.32), int(fy + fh * 0.38)],
+                    "left_eye": [int(fx + fw * 0.68), int(fy + fh * 0.38)],
+                    "nose_tip": [int(fx + fw * 0.50), int(fy + fh * 0.58)],
+                    "right_mouth": [int(fx + fw * 0.35), int(fy + fh * 0.78)],
+                    "left_mouth": [int(fx + fw * 0.65), int(fy + fh * 0.78)],
+                }
+                return {
+                    "box": [fx, fy, fw, fh],
+                    "landmarks": landmarks,
+                    "detector_confidence": 0.85,
+                    "fallback_mode": "haar_cascade",
+                }
             return None
 
         h, w = img_bgr.shape[:2]

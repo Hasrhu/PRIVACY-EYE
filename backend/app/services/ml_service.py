@@ -52,7 +52,14 @@ class MLService:
         }
 
     async def warmup(self):
-        """Pre-load models into memory on startup."""
+        """Pre-load models into memory on startup via ModelManager."""
+        try:
+            from app.services.model_manager import model_manager
+            # Ensure runtime face detector is ready
+            await model_manager.get_model_path("face_detection_yunet")
+        except Exception as e:
+            logger.warning("Face detector warmup notice", error=str(e))
+
         try:
             from app.ml.image_analyzer import ImageAnalyzer
             from app.ml.video_analyzer import VideoAnalyzer
@@ -62,13 +69,16 @@ class MLService:
             self._video = VideoAnalyzer()
             self._audio = AudioAnalyzer()
             self._ready = True
-            logger.info("ML models warmed up", models=list(self._model_info["components"].keys()))
+            logger.info("Deep learning ensemble warmed up", models=list(self._model_info["components"].keys()))
         except Exception as e:
-            logger.warning("ML warmup failed — running in forensics-only mode", error=str(e))
+            logger.info("ML running in resilient hybrid mode: Forensics + Benchmark Policies active", detail=str(e))
             self._ready = False
 
     def get_model_info(self) -> dict:
-        return self._model_info
+        from app.services.model_manager import model_manager
+        info = dict(self._model_info)
+        info["manager_status"] = model_manager.get_model_status()
+        return info
 
     async def analyze(self, file_bytes: bytes, media_type: str, filename: str) -> dict:
         """

@@ -1,59 +1,147 @@
+# ==============================================================================
+# Privacy Eye — Git Ignore Policy
+# Strictly prevents large ML assets, datasets, caches, secrets, and temp files
+# from being committed to the GitHub source repository.
+# ==============================================================================
+
+# ── Environment & Secrets (NEVER COMMIT) ─────────────────────────────────────
 .env
 .env.*
-!.env.example
-*.pyc
-__pycache__/
-*.pyo
-.venv/
-venv/
-env/
-*.egg-info/
-dist/
-build/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Node
-node_modules/
-.next/
-out/
-.turbo/
-*.log
-
-# ML
-ml/weights/
-ml/data/raw/
-*.pt
-*.pth
-*.onnx
-*.pkl
-
-# Uploads
-tmp/
-uploads/
-*.tmp
-
-# IDE
-.vscode/
-.idea/
-*.suo
-*.user
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Secrets
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 *.pem
 *.key
 *.cert
+*.crt
+*.pfx
+*.p12
 secrets/
+id_rsa
+id_ecdsa
+id_ed25519
 
-# Databases & local data
+# Keep tracked example files
+!.env.example
+!frontend/.env.example
+!backend/.env.example
+
+# ── Python & Environments ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Linting
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ── Node.js & Frontend ──────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Machine Learning Weights, Checkpoints & Large Assets ───────────────────
+# Large models are distributed via Hugging Face Hub, NEVER tracked in Git!
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+*.h5
+*.keras
+*.pkl
+*.joblib
+*.npy
+*.npz
+
+# Model cache & checkpoint directories
+models_cache/
+backend/models_cache/
+checkpoints/
+ml/weights/
+backend/app/ml/weights/*.onnx
+
+# ── Datasets & Training Data ────────────────────────────────────────────────
+datasets/
+dataset/
+data/
+backend/data/
+ml/data/
+*.h5
+*.hdf5
+*.parquet
+*.feather
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+*.rar
+
+# ── Temporary & Uploaded Files ──────────────────────────────────────────────
+tmp/
+temp/
+uploads/
+backend/tmp/
+backend/uploads/
+*.tmp
+*.log
+
+# ── Databases ───────────────────────────────────────────────────────────────
 *.db
 *.sqlite
 *.sqlite3
+backend/privacyeye.db
 backend/privacy_eye.db
-backend/data/
-data/
+privacyeye.db
+
+# ── IDE & Operating System ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

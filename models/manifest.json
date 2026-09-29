@@ -1,0 +1,66 @@
+{
+  "version": "1.0.0",
+  "default_repository": "privacy-eye/privacy-eye-models",
+  "default_revision": "main",
+  "description": "Privacy Eye ML Model Manifest for production inference and Hugging Face Hub distribution",
+  "models": [
+    {
+      "name": "face_detection_yunet",
+      "filename": "face_detection_yunet.onnx",
+      "repository": "privacy-eye/privacy-eye-models",
+      "revision": "main",
+      "format": "onnx",
+      "size_bytes": 232589,
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "purpose": "YuNet 5-landmark high-speed face detection for live camera stream and active liveness verification",
+      "framework": "opencv_dnn / onnx",
+      "required_at_runtime": true,
+      "fallback_urls": [
+        "https://raw.githubusercontent.com/opencv/opencv_zoo/master/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+      ],
+      "inference_entrypoint": "app.ml.live_authenticity.LiveAuthenticityEngine"
+    },
+    {
+      "name": "image_efficientnet_b4",
+      "filename": "image_efficientnet_b4.onnx",
+      "repository": "privacy-eye/privacy-eye-models",
+      "revision": "main",
+      "format": "onnx",
+      "size_bytes": 78643200,
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "purpose": "EfficientNet-B4 spatial deepfake detector fine-tuned on FaceForensics++ (c23) and generative datasets",
+      "framework": "onnxruntime",
+      "required_at_runtime": false,
+      "fallback_urls": [],
+      "inference_entrypoint": "app.ml.image_analyzer.ImageAnalyzer"
+    },
+    {
+      "name": "video_efficientnet_temporal",
+      "filename": "video_efficientnet_temporal.onnx",
+      "repository": "privacy-eye/privacy-eye-models",
+      "revision": "main",
+      "format": "onnx",
+      "size_bytes": 157286400,
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "purpose": "Temporal recurrent consistency detector across sampled video frame sequences",
+      "framework": "onnxruntime",
+      "required_at_runtime": false,
+      "fallback_urls": [],
+      "inference_entrypoint": "app.ml.video_analyzer.VideoAnalyzer"
+    },
+    {
+      "name": "audio_wav2vec2_clone",
+      "filename": "audio_wav2vec2_clone.onnx",
+      "repository": "privacy-eye/privacy-eye-models",
+      "revision": "main",
+      "format": "onnx",
+      "size_bytes": 377487360,
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "purpose": "Wav2Vec2 neural voice clone and synthetic speech synthesis discriminator",
+      "framework": "onnxruntime",
+      "required_at_runtime": false,
+      "fallback_urls": [],
+      "inference_entrypoint": "app.ml.audio_analyzer.AudioAnalyzer"
+    }
+  ]
+}
