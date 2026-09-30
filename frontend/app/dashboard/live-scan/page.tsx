@@ -28,6 +28,13 @@ import {
   Headphones,
   RotateCw,
   Cpu,
+  Smartphone,
+  Monitor,
+  EyeOff,
+  Timer,
+  AlertOctagon,
+  PauseCircle,
+  PlayCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -118,6 +125,50 @@ interface LiveFrameResult {
   face_detected: boolean
   face_box?: [number, number, number, number]
   landmarks?: LandmarkPoints
+  total_faces_detected?: number
+  all_face_boxes?: Array<[number, number, number, number]>
+  // Ocular & Eye Quality Signals
+  eye_status?: string
+  eye_visibility_score?: number
+  overall_eye_quality?: number
+  is_eye_blurry?: boolean
+  is_eye_obscured?: boolean
+  left_eye_visible?: boolean
+  right_eye_visible?: boolean
+  left_eye_quality?: number
+  right_eye_quality?: number
+  // Blink & 25-Second Observation Engine
+  blink_status?: string
+  blink_count?: number
+  seconds_since_last_blink?: number
+  continuous_observation_sec?: number
+  is_blink_timer_paused?: boolean
+  timer_pause_reason?: string
+  blink_challenge?: {
+    active: boolean
+    start_time?: number
+    duration_sec?: number
+    countdown_remaining_sec?: number
+    status?: string
+    prompt?: string
+  }
+  // Phone & Electronic Screen Detection
+  phone_detected?: boolean
+  screen_face_associated?: boolean
+  presentation_attack?: boolean
+  phone_object_confidence?: number
+  screen_face_association_confidence?: number
+  presentation_attack_confidence?: number
+  associated_screen?: any
+  detected_screens?: any[]
+  // Decision & Reason Engine
+  input_quality?: 'GOOD' | 'ACCEPTABLE' | 'POOR'
+  reason_codes?: string[]
+  user_message?: string
+  live_human_score?: number
+  synthetic_score?: number
+  replay_score?: number
+  presentation_attack_score?: number
   quality?: {
     quality_index: number
     sharpness_score: number
@@ -183,6 +234,61 @@ interface LiveFrameResult {
   processing_ms?: number
   processing_location?: string
   disclaimer?: string
+}
+
+const REASON_CODE_MAP: Record<string, { label: string; severity: 'safe' | 'warning' | 'danger' | 'info' }> = {
+  PHONE_PRESENTATION_DETECTED: {
+    label: 'Face presented through smartphone / screen',
+    severity: 'danger',
+  },
+  SCREEN_FACE_DETECTED: {
+    label: 'Face bounded inside display screen bezel',
+    severity: 'danger',
+  },
+  MOIRE_PATTERN_DETECTED: {
+    label: 'Moiré high-frequency display grid detected',
+    severity: 'warning',
+  },
+  SPECULAR_SCREEN_GLARE: {
+    label: 'Planar screen specular glare reflection',
+    severity: 'warning',
+  },
+  EYES_NOT_VISIBLE: {
+    label: 'Eyes not visible — ocular liveness paused',
+    severity: 'warning',
+  },
+  EYES_TOO_BLURRY: {
+    label: 'Eyes too blurry for micro-tremor tracking',
+    severity: 'warning',
+  },
+  EYES_OBSCURED_SUNGLASSES: {
+    label: 'Eyes obscured by sunglasses or dark lenses',
+    severity: 'warning',
+  },
+  BLINK_DETECTED: {
+    label: 'Natural biological blink event verified',
+    severity: 'safe',
+  },
+  BLINK_CHALLENGE_REQUESTED: {
+    label: '25s no-blink challenge active: Please blink once',
+    severity: 'warning',
+  },
+  BLINK_CHALLENGE_FAILED: {
+    label: 'No blink verified in 25s — Liveness confidence capped (20-30%)',
+    severity: 'warning',
+  },
+  MULTIPLE_FACES_DETECTED: {
+    label: 'Multiple faces in frame — primary face tracked',
+    severity: 'info',
+  },
+  LOW_INPUT_QUALITY: {
+    label: 'Low camera illumination or motion blur',
+    severity: 'warning',
+  },
+  STATIC_PHOTO_SUSPECTED: {
+    label: 'Sub-physiological jitter (Static print suspected)',
+    severity: 'danger',
+  },
 }
 
 interface TrainingStats {
@@ -520,6 +626,11 @@ export default function LiveCameraScanPage() {
         snapshot_base64: consentGiven ? (currentSnapshotB64 || undefined) : undefined,
         consent_given: consentGiven,
         landmarks: analysisResult.landmarks,
+        eye_status: analysisResult.eye_status,
+        blink_count: analysisResult.blink_count,
+        phone_detected: analysisResult.phone_detected,
+        presentation_attack: analysisResult.presentation_attack,
+        reason_codes: analysisResult.reason_codes,
       })
 
       setSavedReportId(auditRes.data.report_id)
@@ -609,6 +720,80 @@ export default function LiveCameraScanPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* ── LEFT: CAMERA & TELEMETRY (7 Cols) ── */}
         <div className="lg:col-span-7 space-y-6">
+          {/* ── PRESENTATION ATTACK ALERT BANNER (Case B: Phone/Screen Presentation) ── */}
+          {analysisResult?.presentation_attack && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-5 rounded-3xl bg-status-danger/15 border-2 border-status-danger/50 backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-status-danger shadow-[0_0_35px_rgba(239,68,68,0.35)]"
+            >
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-status-danger/25 border border-status-danger/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Smartphone className="w-6 h-6 text-status-danger animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-status-danger/20 text-[10px] font-mono font-black text-status-danger uppercase tracking-wider">
+                      CRITICAL PRESENTATION ATTACK
+                    </span>
+                  </div>
+                  <h4 className="text-base font-extrabold uppercase tracking-wide text-white">
+                    POSSIBLE SCREEN/REPLAY PRESENTATION ATTACK
+                  </h4>
+                  <p className="text-xs text-white/80 leading-relaxed max-w-xl">
+                    The camera is not observing the target human directly; the detected face is being presented through a smartphone or electronic screen.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] font-mono text-white/70">
+                    <span>
+                      Device Conf:{' '}
+                      <strong className="text-white">
+                        {Math.round((analysisResult.phone_object_confidence || 0.95) * 100)}%
+                      </strong>
+                    </span>
+                    <span>•</span>
+                    <span>
+                      Face Inside Display:{' '}
+                      <strong className="text-white">
+                        {Math.round((analysisResult.screen_face_association_confidence || 0.92) * 100)}%
+                      </strong>
+                    </span>
+                    <span>•</span>
+                    <span>
+                      Attack Risk:{' '}
+                      <strong className="text-status-danger font-bold">
+                        {Math.round((analysisResult.presentation_attack_confidence || 0.94) * 100)}%
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex md:flex-col items-center justify-between w-full md:w-auto gap-2 px-4 py-2.5 rounded-2xl bg-status-danger/20 border border-status-danger/30 text-center flex-shrink-0">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-white/60">
+                  Live Human Direct Obs
+                </span>
+                <span className="text-lg font-black font-mono text-status-danger">
+                  0%
+                </span>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── MULTIPLE FACES DETECTED BANNER ── */}
+          {Boolean(analysisResult?.total_faces_detected && analysisResult.total_faces_detected > 1) && (
+            <div className="p-3.5 rounded-2xl bg-brand-cyan/15 border border-brand-cyan/30 flex items-center justify-between gap-3 text-xs text-brand-cyan backdrop-blur-xl">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <span>
+                  Multiple faces detected ({analysisResult?.total_faces_detected} in scene). Tracking primary target face #{1}.
+                </span>
+              </div>
+              <span className="text-[10px] font-mono bg-brand-cyan/20 px-2 py-0.5 rounded-lg text-white font-semibold">
+                Target Face Locked
+              </span>
+            </div>
+          )}
+
           {/* Viewfinder Glass Card */}
           <div className="relative rounded-4xl glass-floating border border-white/14 overflow-hidden aspect-[4/3] bg-surface flex items-center justify-center shadow-glass-floating">
             {/* Native Video Feed */}
@@ -655,7 +840,7 @@ export default function LiveCameraScanPage() {
 
             {/* Active Live Floating Telemetry Top Badges */}
             {isCameraActive && (
-              <div className="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-2 max-w-[90%]">
+              <div className="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-2 max-w-[92%]">
                 <div className="px-3 py-1 rounded-full glass-surface border border-white/12 flex items-center gap-2 text-[11px] font-mono">
                   <span className="w-2 h-2 rounded-full bg-status-safe animate-pulse" />
                   <span className="text-white font-semibold">LIVE HUD</span>
@@ -663,6 +848,47 @@ export default function LiveCameraScanPage() {
                 <div className="px-3 py-1 rounded-full glass-surface border border-white/12 text-[11px] font-mono text-white/60">
                   {analysisResult?.processing_ms ? `${analysisResult.processing_ms} ms` : 'Syncing'}
                 </div>
+
+                {/* Eye Status Top Badge */}
+                {analysisResult?.eye_status && (
+                  <div
+                    className={`px-3 py-1 rounded-full glass-surface border flex items-center gap-1.5 text-[11px] font-mono ${
+                      analysisResult.eye_status === 'BOTH_EYES_VISIBLE'
+                        ? 'border-status-safe/30 text-status-safe'
+                        : analysisResult.eye_status === 'EYE_TOO_BLURRY' || analysisResult.eye_status === 'EYES_NOT_VISIBLE'
+                        ? 'border-status-warning/40 text-status-warning'
+                        : analysisResult.eye_status === 'EYES_OBSCURED'
+                        ? 'border-brand-violet/40 text-brand-violet'
+                        : 'border-white/12 text-white/70'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>
+                      {analysisResult.eye_status === 'BOTH_EYES_VISIBLE'
+                        ? 'Eyes Visible'
+                        : analysisResult.eye_status === 'EYE_TOO_BLURRY'
+                        ? 'Eyes Blurry'
+                        : analysisResult.eye_status === 'EYES_OBSCURED'
+                        ? 'Sunglasses / Tint'
+                        : analysisResult.eye_status === 'LEFT_ONLY' || analysisResult.eye_status === 'RIGHT_ONLY'
+                        ? 'Partial Eye View'
+                        : 'Eyes Unavailable'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Blink Tracker Badge */}
+                {analysisResult?.blink_count !== undefined && (
+                  <div className="px-3 py-1 rounded-full glass-surface border border-white/12 flex items-center gap-1.5 text-[11px] font-mono text-white/80">
+                    <Timer className="w-3.5 h-3.5 text-brand-cyan" />
+                    <span>
+                      {analysisResult.blink_count} Blinks
+                      {analysisResult.is_blink_timer_paused ? ' (Paused)' : ''}
+                    </span>
+                  </div>
+                )}
+
+                {/* Hardware Headphone Badge */}
                 {analysisResult?.ear_accessories && (
                   <div className="px-3 py-1 rounded-full glass-surface border border-white/12 flex items-center gap-1.5 text-[11px] font-mono">
                     <Headphones
@@ -679,6 +905,14 @@ export default function LiveCameraScanPage() {
                         ? analysisResult.ear_accessories.accessory_type.replace(/_/g, ' ')
                         : 'No Hardware'}
                     </span>
+                  </div>
+                )}
+
+                {/* Phone In Scene (Case A: Non-Attacking Phone in hand/pocket) */}
+                {analysisResult?.phone_detected && !analysisResult.presentation_attack && (
+                  <div className="px-3 py-1 rounded-full glass-surface border border-brand-blue/40 flex items-center gap-1.5 text-[11px] font-mono text-brand-blue">
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span>Device in Scene (Holding)</span>
                   </div>
                 )}
               </div>
@@ -714,37 +948,63 @@ export default function LiveCameraScanPage() {
           </div>
 
           {/* ── METRICS BELOW CAMERA (Section 16 requirement) ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <GlassCard variant="elevated" className="p-4 space-y-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <GlassCard variant="elevated" className="p-3.5 space-y-1">
               <span className="text-[10px] font-mono uppercase text-white/50 block">Liveness</span>
-              <p className="text-2xl font-bold font-mono text-status-safe">
+              <p className="text-xl font-bold font-mono text-status-safe">
                 {analysisResult ? `${livenessPct}%` : '—'}
               </p>
               <span className="text-[10px] text-white/40 block">Micro-motion</span>
             </GlassCard>
 
-            <GlassCard variant="elevated" className="p-4 space-y-1">
+            <GlassCard variant="elevated" className="p-3.5 space-y-1">
               <span className="text-[10px] font-mono uppercase text-white/50 block">Synthetic Risk</span>
-              <p className="text-2xl font-bold font-mono text-status-warning">
+              <p className="text-xl font-bold font-mono text-status-warning">
                 {analysisResult ? `${syntheticPct}%` : '—'}
               </p>
               <span className="text-[10px] text-white/40 block">Spatial Residuals</span>
             </GlassCard>
 
-            <GlassCard variant="elevated" className="p-4 space-y-1">
+            <GlassCard variant="elevated" className="p-3.5 space-y-1">
               <span className="text-[10px] font-mono uppercase text-white/50 block">Replay Risk</span>
-              <p className="text-2xl font-bold font-mono text-brand-blue">
+              <p
+                className={`text-xl font-bold font-mono ${
+                  analysisResult?.presentation_attack ? 'text-status-danger' : 'text-brand-blue'
+                }`}
+              >
                 {analysisResult ? `${replayPct}%` : '—'}
               </p>
-              <span className="text-[10px] text-white/40 block">Fourier PAD</span>
+              <span className="text-[10px] text-white/40 block">
+                {analysisResult?.presentation_attack ? 'Screen Presentation' : 'Fourier PAD'}
+              </span>
             </GlassCard>
 
-            <GlassCard variant="elevated" className="p-4 space-y-1">
-              <span className="text-[10px] font-mono uppercase text-white/50 block">Input Quality</span>
-              <p className="text-2xl font-bold font-mono text-white">
-                {analysisResult?.quality?.sharpness_label || 'GOOD'}
+            <GlassCard variant="elevated" className="p-3.5 space-y-1">
+              <span className="text-[10px] font-mono uppercase text-white/50 block">Eye Quality</span>
+              <p className="text-xl font-bold font-mono text-white">
+                {analysisResult?.overall_eye_quality !== undefined
+                  ? `${analysisResult.overall_eye_quality}%`
+                  : analysisResult?.quality?.sharpness_label || 'GOOD'}
               </p>
-              <span className="text-[10px] text-white/40 block">Laplacian Sharpness</span>
+              <span className="text-[10px] text-white/40 block">
+                {analysisResult?.eye_status === 'BOTH_EYES_VISIBLE'
+                  ? 'Both Visible'
+                  : analysisResult?.eye_status === 'EYE_TOO_BLURRY'
+                  ? 'Blurry'
+                  : 'Ocular Quality'}
+              </span>
+            </GlassCard>
+
+            <GlassCard variant="elevated" className="p-3.5 space-y-1 col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-mono uppercase text-white/50 block">Blinks Verified</span>
+              <p className="text-xl font-bold font-mono text-brand-cyan">
+                {analysisResult?.blink_count !== undefined ? `${analysisResult.blink_count}` : '0'}
+              </p>
+              <span className="text-[10px] text-white/40 block">
+                {analysisResult?.seconds_since_last_blink !== undefined
+                  ? `Last: ${analysisResult.seconds_since_last_blink}s ago`
+                  : '25s Tracker'}
+              </span>
             </GlassCard>
           </div>
 
@@ -895,7 +1155,7 @@ export default function LiveCameraScanPage() {
             </div>
           </GlassCard>
 
-          {/* ── "WHY?" STRUCTURED RESULT EXPLANATION (Section 18 requirement) ── */}
+          {/* ── "WHY?" STRUCTURED RESULT EXPLANATION (Section 18 & 64 requirement) ── */}
           <GlassCard variant="elevated" className="space-y-4">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-brand-blue" />
@@ -919,14 +1179,36 @@ export default function LiveCameraScanPage() {
               </div>
               <div className="flex items-center justify-between pb-2 border-b border-white/6">
                 <span className="text-white/70">Replay attack risk</span>
-                <span className="font-semibold text-status-safe font-mono">
-                  {replayPct < 25 ? 'Low' : 'Elevated'}
+                <span
+                  className={`font-semibold font-mono ${
+                    analysisResult?.presentation_attack ? 'text-status-danger font-bold' : 'text-status-safe'
+                  }`}
+                >
+                  {analysisResult?.presentation_attack
+                    ? 'Screen Presentation (100%)'
+                    : replayPct < 25
+                    ? 'Low'
+                    : 'Elevated'}
                 </span>
               </div>
               <div className="flex items-center justify-between pb-2 border-b border-white/6">
                 <span className="text-white/70">Synthetic indicators</span>
                 <span className="font-semibold text-status-safe font-mono">
                   {syntheticPct < 25 ? 'Low' : 'Elevated'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-2 border-b border-white/6">
+                <span className="text-white/70">Ocular visibility status</span>
+                <span
+                  className={`font-semibold font-mono ${
+                    analysisResult?.eye_status === 'BOTH_EYES_VISIBLE'
+                      ? 'text-status-safe'
+                      : analysisResult?.eye_status === 'EYE_TOO_BLURRY'
+                      ? 'text-status-warning'
+                      : 'text-white/70'
+                  }`}
+                >
+                  {analysisResult?.eye_status ? analysisResult.eye_status.replace(/_/g, ' ') : 'STANDBY'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -937,10 +1219,216 @@ export default function LiveCameraScanPage() {
               </div>
             </div>
 
+            {/* Active Machine-Readable Reason Codes (Section 64 & 65) */}
+            {analysisResult?.reason_codes && analysisResult.reason_codes.length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t border-white/6">
+                <span className="text-[10px] font-mono uppercase text-white/40 block">
+                  Active Reason Codes:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {analysisResult.reason_codes.map((code) => {
+                    const info = REASON_CODE_MAP[code] || {
+                      label: code.replace(/_/g, ' '),
+                      severity: 'info',
+                    }
+                    return (
+                      <span
+                        key={code}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono border ${
+                          info.severity === 'danger'
+                            ? 'bg-status-danger/15 border-status-danger/35 text-status-danger font-semibold'
+                            : info.severity === 'warning'
+                            ? 'bg-status-warning/15 border-status-warning/30 text-status-warning'
+                            : info.severity === 'safe'
+                            ? 'bg-status-safe/15 border-status-safe/30 text-status-safe'
+                            : 'bg-white/5 border-white/10 text-white/70'
+                        }`}
+                        title={code}
+                      >
+                        {info.label}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             <p className="text-[11px] text-white/50 leading-relaxed pt-2 border-t border-white/6 italic">
-              "The observed live sequence contains no strong synthetic-media indicators based on the
-              multi-spectral models evaluated."
+              {analysisResult?.user_message ||
+                '"The observed live sequence contains no strong synthetic-media indicators based on the multi-spectral models evaluated."'}
             </p>
+          </GlassCard>
+
+          {/* ── DEDICATED EYE & OCULAR ANALYSIS CARD (Sections 7-12) ── */}
+          <GlassCard variant="elevated" className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/6">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-brand-cyan" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                  Ocular & Eye Visibility Engine
+                </h3>
+              </div>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+                  analysisResult?.eye_status === 'BOTH_EYES_VISIBLE'
+                    ? 'bg-status-safe/20 text-status-safe border border-status-safe/30'
+                    : analysisResult?.eye_status === 'EYE_TOO_BLURRY'
+                    ? 'bg-status-warning/20 text-status-warning border border-status-warning/30'
+                    : analysisResult?.eye_status === 'EYES_OBSCURED'
+                    ? 'bg-brand-violet/20 text-brand-violet border border-brand-violet/30'
+                    : analysisResult?.eye_status === 'LEFT_ONLY' || analysisResult?.eye_status === 'RIGHT_ONLY'
+                    ? 'bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30'
+                    : 'bg-white/10 text-white/50 border border-white/10'
+                }`}
+              >
+                {analysisResult?.eye_status ? analysisResult.eye_status.replace(/_/g, ' ') : 'STANDBY'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-2xl bg-white/4 border border-white/6 space-y-1.5">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-white/50">Left Eye</span>
+                  <span className={analysisResult?.left_eye_visible ? 'text-status-safe' : 'text-white/40'}>
+                    {analysisResult?.left_eye_visible ? 'Visible' : 'Hidden'}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-brand-cyan rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((analysisResult?.left_eye_quality || 0) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono text-white/40 block">
+                  Quality: {Math.round((analysisResult?.left_eye_quality || 0) * 100)}%
+                </span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white/4 border border-white/6 space-y-1.5">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-white/50">Right Eye</span>
+                  <span className={analysisResult?.right_eye_visible ? 'text-status-safe' : 'text-white/40'}>
+                    {analysisResult?.right_eye_visible ? 'Visible' : 'Hidden'}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-brand-cyan rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((analysisResult?.right_eye_quality || 0) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono text-white/40 block">
+                  Quality: {Math.round((analysisResult?.right_eye_quality || 0) * 100)}%
+                </span>
+              </div>
+            </div>
+
+            {/* Informative notice when eyes are blurry or obscured (Section 10 & 11) */}
+            {(analysisResult?.is_eye_blurry ||
+              analysisResult?.is_eye_obscured ||
+              analysisResult?.eye_status === 'EYE_TOO_BLURRY' ||
+              analysisResult?.eye_status === 'EYES_NOT_VISIBLE' ||
+              analysisResult?.eye_status === 'EYES_OBSCURED') && (
+              <div className="p-3 rounded-2xl bg-status-warning/10 border border-status-warning/20 text-xs text-status-warning flex items-start gap-2.5">
+                <EyeOff className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-white">
+                    {analysisResult?.is_eye_obscured ? 'Eyes Obscured' : 'Eyes Not Clearly Visible'}
+                  </p>
+                  <p className="text-[11px] text-white/70 leading-relaxed">
+                    Eye-based liveness evidence is unavailable. Confidence is computed from spatial, temporal,
+                    and benchmark evidence (not penalized to 0%).
+                  </p>
+                </div>
+              </div>
+            )}
+          </GlassCard>
+
+          {/* ── DEDICATED BLINK ENGINE & 25-SECOND OBSERVATION CARD (Sections 13-23) ── */}
+          <GlassCard variant="elevated" className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/6">
+              <div className="flex items-center gap-2">
+                <Timer className="w-4 h-4 text-brand-blue" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                  Blink & 25s Observation Engine
+                </h3>
+              </div>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+                  analysisResult?.blink_status === 'CHALLENGE_ACTIVE'
+                    ? 'bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/40 animate-pulse'
+                    : analysisResult?.blink_status === 'CHALLENGE_FAILED'
+                    ? 'bg-status-warning/20 text-status-warning border border-status-warning/30'
+                    : analysisResult?.is_blink_timer_paused
+                    ? 'bg-white/10 text-white/50 border border-white/10'
+                    : 'bg-status-safe/20 text-status-safe border border-status-safe/30'
+                }`}
+              >
+                {analysisResult?.blink_status || 'STANDBY'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="p-3 rounded-2xl bg-white/4 border border-white/6 space-y-1">
+                <span className="text-[10px] font-mono uppercase text-white/40 block">Verified Blinks</span>
+                <p className="text-2xl font-black font-mono text-brand-cyan">
+                  {analysisResult?.blink_count ?? 0}
+                </p>
+                <span className="text-[10px] text-white/50 block">Biological</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white/4 border border-white/6 space-y-1">
+                <span className="text-[10px] font-mono uppercase text-white/40 block">Last Blink</span>
+                <p className="text-2xl font-black font-mono text-white">
+                  {analysisResult?.seconds_since_last_blink !== undefined
+                    ? `${analysisResult.seconds_since_last_blink}s`
+                    : '—'}
+                </p>
+                <span className="text-[10px] text-white/50 block">Elapsed</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white/4 border border-white/6 space-y-1">
+                <span className="text-[10px] font-mono uppercase text-white/40 block">Observation</span>
+                <p className="text-2xl font-black font-mono text-status-safe">
+                  {analysisResult?.continuous_observation_sec !== undefined
+                    ? `${Math.round(analysisResult.continuous_observation_sec)}s`
+                    : '0s'}
+                </p>
+                <span className="text-[10px] text-white/50 block">/ 25s window</span>
+              </div>
+            </div>
+
+            {/* Timer Progress Bar towards 25-Second Observation Window */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[10px] font-mono text-white/50">
+                <span>Observation Window Progress</span>
+                <span>
+                  {Math.round(Math.min(100, ((analysisResult?.continuous_observation_sec || 0) / 25.0) * 100))}%
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    (analysisResult?.continuous_observation_sec || 0) >= 20
+                      ? 'bg-status-warning'
+                      : 'bg-brand-cyan'
+                  }`}
+                  style={{
+                    width: `${Math.min(100, Math.max(4, ((analysisResult?.continuous_observation_sec || 0) / 25.0) * 100))}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Timer Paused Notice */}
+            {analysisResult?.is_blink_timer_paused && (
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/8 flex items-center gap-2 text-xs text-white/60 font-mono">
+                <PauseCircle className="w-4 h-4 text-status-warning flex-shrink-0" />
+                <span>
+                  Observation Paused: {analysisResult.timer_pause_reason || 'Eyes not clearly visible'}
+                </span>
+              </div>
+            )}
           </GlassCard>
 
           {/* ── GUIDED PROTOCOL HUD (Smile, 3 Blinks, Rotation) ── */}
@@ -1175,6 +1663,47 @@ export default function LiveCameraScanPage() {
                 >
                   Enforce Zero Storage
                 </GlassButton>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 25-SECOND "PLEASE BLINK" GLASS CHALLENGE MODAL (Sections 19, 20 & 22) ── */}
+      <AnimatePresence>
+        {analysisResult?.blink_challenge?.active && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-canvas/80 backdrop-blur-2xl">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              className="w-full max-w-sm rounded-4xl glass-floating border-2 border-brand-cyan/60 p-8 space-y-6 text-center shadow-[0_0_60px_rgba(6,182,212,0.35)] relative overflow-hidden"
+            >
+              {/* Glowing decorative halo */}
+              <div className="absolute -top-12 -right-12 w-32 h-32 bg-brand-cyan/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-brand-blue/20 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="w-20 h-20 mx-auto rounded-3xl bg-brand-cyan/15 border border-brand-cyan/35 flex items-center justify-center text-brand-cyan shadow-glow-blue animate-pulse">
+                <Eye className="w-10 h-10" />
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-[10px] uppercase font-mono tracking-widest text-brand-cyan font-bold block">
+                  Liveness Verification Challenge
+                </span>
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">
+                  PLEASE BLINK
+                </h2>
+                <p className="text-xs text-white/70 leading-relaxed max-w-xs mx-auto">
+                  We couldn't detect a clear blink in the last 25 seconds. Please blink once to continue verification.
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center justify-center gap-1.5 pt-2">
+                <div className="w-20 h-20 rounded-full border-2 border-brand-cyan/70 bg-brand-cyan/10 flex items-center justify-center font-mono text-3xl font-black text-brand-cyan shadow-[0_0_25px_rgba(6,182,212,0.4)]">
+                  0{analysisResult.blink_challenge.countdown_remaining_sec ?? 5}
+                </div>
+                <span className="text-[11px] font-mono text-white/50">seconds remaining</span>
               </div>
             </motion.div>
           </div>

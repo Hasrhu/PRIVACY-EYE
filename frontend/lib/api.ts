@@ -131,6 +131,11 @@ export const liveScanApi = {
     snapshot_base64?: string
     consent_given?: boolean
     landmarks?: any
+    eye_status?: string
+    blink_count?: number
+    phone_detected?: boolean
+    presentation_attack?: boolean
+    reason_codes?: string[]
   }) => api.post('/live/save-audit', payload),
 
   submitConsent: (payload: {
