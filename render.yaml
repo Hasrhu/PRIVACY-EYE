@@ -1,0 +1,22 @@
+# ==============================================================================
+# Privacy Eye — Render Blueprint Infrastructure as Code
+# Deploys the FastAPI ML backend on Render with 1-click automation
+# ==============================================================================
+services:
+  - type: web
+    name: privacy-eye-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PORT
+        value: 8000
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./privacyeye.db
+      - key: CORS_ORIGINS
+        value: "*"
