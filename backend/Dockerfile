@@ -14,19 +14,21 @@ WORKDIR /app
 
 # Install essential system libraries for OpenCV, audio DSP, and health probes
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
+    libgomp1 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libsndfile1 \
     ffmpeg \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install python dependencies first for efficient layer caching
+# Install python dependencies (CPU-optimized PyTorch first for fast, low-memory builds)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code
