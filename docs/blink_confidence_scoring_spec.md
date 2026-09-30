@@ -92,14 +92,14 @@ $$\text{Quality} = (0.35 \times \text{Duration Optimality}) + (0.40 \times \text
 
 ## 6. Presentation Attack Overrides & Edge Cases
 
-| Scenario | Observation State | Presentation Override? | Resulting Assessment | Confidence |
-|---|---|---|---|---|
-| **Natural Human Blinking** | Face detected, 1 confirmed blink, natural motion | NO | `LIKELY_LIVE_HUMAN` | `65% – 84%` |
-| **Face in Phone Screen** | Phone detected + face inside screen + high PAD | **YES (Hard Override)** | `POSSIBLE_SCREEN_REPLAY_ATTACK` | **`0.0%`** |
-| **Phone in Background** | Phone on desk / held in hand, face outside screen | NO | Normal evaluation | `>= 65%` |
-| **Static Photo Attack** | Eyes visible, 0 blinks, zero micro-movement | NO (Challenge / PAD) | `PLEASE_BLINK` → `UNABLE_TO_DETERMINE` | `< 30%` |
-| **Motion Blur / Occlusion** | Eyes blurry, sunglasses, or turned away | NO (Timer Paused) | `HUMAN_FACE_DETECTED` | `50% – 74%` |
-| **Contradictory Signals** | Blink observed, but high Moiré / synthetic risk | NO (Disagreement) | `SUSPICIOUS` | `< 55% (LOW rel.)` |
+| Scenario | Observation State | Presentation Override? | Verification Verdict | Resulting Assessment | Confidence |
+|---|---|---|---|---|---|
+| **Natural Human Blinking** | Face detected, 1 confirmed blink, natural motion | NO | **PASS** | `LIKELY_LIVE_HUMAN` | `65% – 84%` |
+| **Face in Phone Screen (RULE TEST E)** | Phone detected + face inside screen + high PAD | **YES (Hard Override)** | **FAIL** | `FAIL_PRESENTATION_ATTACK` | **`0.0%`** |
+| **Phone in Background** | Phone on desk / held in hand, face outside screen | NO | **PENDING / PASS** | Normal evaluation | `>= 65%` |
+| **Static Photo Attack** | Eyes visible, 0 blinks, zero micro-movement | NO (Challenge / PAD) | **FAIL** | `PLEASE_BLINK` → `UNABLE_TO_DETERMINE` | `< 30%` |
+| **Motion Blur / Occlusion** | Eyes blurry, sunglasses, or turned away | NO (Timer Paused) | **PENDING** | `HUMAN_FACE_DETECTED` | `50% – 74%` |
+| **Contradictory Signals** | Blink observed, but high Moiré / synthetic risk | NO (Disagreement) | **FAIL** | `SUSPICIOUS` | `< 55% (LOW rel.)` |
 
 ---
 

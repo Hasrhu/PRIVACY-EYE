@@ -318,10 +318,14 @@ def test_rule_test_e_phone_displaying_face_zero_confidence():
         benchmarks=benchmarks,
     )
 
+    assert res["verdict"] == "FAIL"
+    assert res["verification_status"] == "FAIL"
+    assert res["is_live_human"] is False
     assert res["presentation_attack_override"] is True
     assert res["live_human_confidence"] == 0.0
     assert res["model_probability"] == 0.0
-    assert res["assessment"] == "POSSIBLE_SCREEN_REPLAY_ATTACK"
+    assert res["assessment"] in ("FAIL_PRESENTATION_ATTACK", "POSSIBLE_SCREEN_REPLAY_ATTACK")
+    assert "FAIL" in res["category_label"]
 
 
 # ── TEST F: PHONE IN BACKGROUND -> NO CONFIDENCE OVERRIDE ──────────────────────

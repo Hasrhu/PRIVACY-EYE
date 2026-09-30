@@ -352,23 +352,29 @@ class ConfidenceFusionEngine:
 
         # ── 6. Centralized Score Fusion ──────────────────────────────────────
         if presentation_override:
-            # HARD OVERRIDE: Presentation attack detected (face presented via electronic screen)
+            # HARD OVERRIDE: Presentation attack detected (face presented via electronic screen) -> FAIL
             product_confidence = 0.0
             model_probability = 0.0
             reliability = "HIGH"
-            assessment = "POSSIBLE_SCREEN_REPLAY_ATTACK"
-            category_label = "Possible screen/replay presentation attack"
+            verdict = "FAIL"
+            verification_status = "FAIL"
+            is_live_human = False
+            assessment = "FAIL_PRESENTATION_ATTACK"
+            category_label = "FAIL: Screen/Replay Presentation Attack"
             explanation = (
-                "Possible screen/replay presentation attack. The detected face appears to be presented "
+                "Verification FAILED: Possible screen/replay presentation attack. The detected face appears to be presented "
                 "through a smartphone or electronic display rather than direct human observation."
             )
-            user_message = "A face appears to be displayed through a phone or electronic screen."
+            user_message = "Verification FAILED: A face appears to be displayed through a phone or electronic screen."
 
         elif challenge_active:
             # Active "PLEASE BLINK" challenge countdown
             product_confidence = 45.0
             model_probability = 0.45
             reliability = "MEDIUM"
+            verdict = "PENDING"
+            verification_status = "PENDING"
+            is_live_human = False
             assessment = "PLEASE_BLINK"
             category_label = "PLEASE BLINK"
             explanation = (
@@ -378,10 +384,13 @@ class ConfidenceFusionEngine:
             user_message = "Please blink once to continue verification."
 
         elif challenge_status == "FAILED":
-            # 25-second challenge failed without blink: enforce low liveness ceiling
+            # 25-second challenge failed without blink: enforce low liveness ceiling -> FAIL
             product_confidence = round(24.0 + (supp_eval["supporting_score"] * 5.0), 1)
             model_probability = 0.26
             reliability = "LOW"
+            verdict = "FAIL"
+            verification_status = "FAIL"
+            is_live_human = False
             assessment = "UNABLE_TO_DETERMINE"
             category_label = "Low liveness confidence (No blink verified in 25s observation)"
             explanation = (
@@ -410,6 +419,9 @@ class ConfidenceFusionEngine:
                 product_confidence = round(min(55.0, raw_product_conf), 1)
                 model_probability = round(product_confidence / 100.0, 3)
                 reliability = "LOW"
+                verdict = "FAIL"
+                verification_status = "FAIL"
+                is_live_human = False
                 assessment = "SUSPICIOUS"
                 category_label = "Suspicious (Signal Disagreement)"
                 explanation = "Blink observed but contradictory forensic or frequency anomalies detected."
@@ -422,6 +434,9 @@ class ConfidenceFusionEngine:
                     reliability = "HIGH"
                 else:
                     reliability = "MEDIUM"
+                verdict = "PASS"
+                verification_status = "PASS"
+                is_live_human = True
                 assessment = "LIKELY_LIVE_HUMAN"
                 category_label = "Likely live human"
                 explanation = (
@@ -437,6 +452,9 @@ class ConfidenceFusionEngine:
             product_confidence = round(float(max(50.0, min(74.0, base_score))), 1)
             model_probability = round(product_confidence / 100.0, 3)
             reliability = "MEDIUM" if quality.get("quality_index", 0) >= 50 else "LOW"
+            verdict = "PENDING"
+            verification_status = "PENDING"
+            is_live_human = False
             assessment = "HUMAN_FACE_DETECTED"
             category_label = "Human face detected (Eyes not clearly visible)"
             explanation = (
@@ -452,6 +470,9 @@ class ConfidenceFusionEngine:
             product_confidence = round(float(max(45.0, min(62.0, base_score))), 1)
             model_probability = round(product_confidence / 100.0, 3)
             reliability = "MEDIUM"
+            verdict = "PENDING"
+            verification_status = "PENDING"
+            is_live_human = False
             assessment = "ANALYZING"
             category_label = "Analyzing facial and ocular dynamics"
             explanation = "Tracking face and awaiting natural human blink for high-confidence verification."
@@ -472,6 +493,9 @@ class ConfidenceFusionEngine:
         self._session_last_assessment[session_id] = assessment
 
         return {
+            "verdict": verdict,
+            "verification_status": verification_status,
+            "is_live_human": is_live_human,
             "live_human_confidence": product_confidence,
             "model_probability": model_probability,
             "synthetic_risk": round(synthetic_risk, 3),

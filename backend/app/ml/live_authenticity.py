@@ -1431,6 +1431,9 @@ class LiveAuthenticityEngine:
         presentation_attack_score = round(float(screen_res["presentation_attack_confidence"]), 3)
 
         return {
+            "verdict": fusion.get("verdict", "PENDING"),
+            "verification_status": fusion.get("verification_status", "PENDING"),
+            "is_live_human": fusion.get("is_live_human", False),
             "assessment": assessment,
             "category_label": category_label,
             "confidence": confidence,
