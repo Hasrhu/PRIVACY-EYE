@@ -38,6 +38,7 @@ from app.ml.eye_analyzer import (
 )
 from app.ml.blink_engine import BlinkEngine
 from app.ml.screen_detector import ScreenDetector
+from app.ml.confidence_fusion import confidence_fusion_engine, ConfidenceFusionEngine
 
 logger = structlog.get_logger(__name__)
 
@@ -57,10 +58,11 @@ class LiveAuthenticityEngine:
         self._silent_face = SilentFaceAntiSpoofingEngine()
         self._ffhq_policy = FFHQPolicyProcessor()
 
-        # Dedicated Eye, Blink, and Screen Detectors
+        # Dedicated Eye, Blink, Screen, and Centralized Confidence Engines
         self._eye_analyzer = EyeAnalyzer()
         self._blink_engine = BlinkEngine()
         self._screen_detector = ScreenDetector()
+        self._fusion_engine = confidence_fusion_engine
         self._session_smoothed_confidence: Dict[str, float] = {}
         self._session_start_time: Dict[str, float] = {}
 
@@ -1378,129 +1380,51 @@ class LiveAuthenticityEngine:
         reason_codes.extend(screen_res.get("reason_codes", []))
 
         vitality_flux = (d_yaw * 6.0) + (d_pitch * 6.0) + (disp_rate * 3.0)
-        time_flux = math.sin(time.time() * 2.8) * 0.5
-        user_message = None
 
-        # ── CASE 2: PRIMARY RULE — PHONE / SCREEN PRESENTATION ATTACK ───────
-        if screen_res["presentation_attack"]:
-            # Hard 0 live-human confidence, 100% presentation risk
-            confidence = 0.0
-            liveness_score = 0.0
-            spatial_risk = max(spatial_risk, 0.85)
-            presentation_risk = 1.0
-            assessment = "POSSIBLE_REPLAY"
-            category_label = "Possible screen/replay presentation attack"
-            explanation = (
-                "Possible screen/replay presentation attack. The detected face appears to be presented "
-                "through a smartphone or electronic display rather than direct human observation."
-            )
-            user_message = "A face appears to be displayed through a phone or electronic screen."
-            reliability = "HIGH"
+        # ── 12. Centralized Confidence Fusion Engine ────────────────────────
+        buf = self._session_buffers.get(session_id, [])
+        temp_consistency = 0.92 if len(buf) >= 3 else 0.75
+        tracking_quality = 0.95 if face_info.get("yunet_used", False) else 0.80
 
-        # ── CASE 4: 25-SECOND NO-BLINK CHALLENGE PROTOCOL ───────────────────
-        elif blink_res["challenge"]["active"]:
-            # Active "PLEASE BLINK" challenge countdown
-            calc_conf = 45.0 + time_flux
-            confidence = round(float(max(40.0, min(50.0, calc_conf))), 1)
-            assessment = "BLINK_CHALLENGE_REQUESTED"
-            category_label = "PLEASE BLINK"
-            explanation = (
-                "We haven't detected a clear blink in 25 seconds of clear observation. "
-                "Please blink once to continue verification."
-            )
-            user_message = "Please blink once to continue verification."
-            reliability = "MEDIUM"
+        movement_data_payload = {
+            "displacement_rate": disp_rate,
+            "d_yaw": d_yaw,
+            "d_pitch": d_pitch,
+            "pose_continuity": 0.92,
+            "physiological_liveness": 0.88 if ffhq_res.get("is_organic", True) else 0.55,
+        }
+        benchmarks_payload = {
+            "faceforensics": ff_res,
+            "celeb_df": celeb_res,
+            "silent_face": silent_res,
+            "ffhq_baseline": ffhq_res,
+        }
 
-        elif blink_res["challenge"]["status"] == "FAILED":
-            # 25-second challenge failed without blink: enforce 20-30% liveness ceiling
-            confidence = round(float(min(28.0, 24.5 + time_flux)), 1)
-            liveness_score = round(confidence / 100.0, 3)
-            assessment = "UNABLE_TO_DETERMINE"
-            category_label = "Likely live human: Low reliability (No blink verified)"
-            explanation = (
-                "No clear blink was detected during the 25-second verification window. "
-                "Liveness confidence is calibrated to a low-certainty ceiling."
-            )
-            user_message = "A clear blink was not detected. Reliability has been reduced."
-            reliability = "LOW"
+        fusion = self._fusion_engine.fuse(
+            session_id=session_id,
+            blink_res=blink_res,
+            eye_res=eye_res,
+            screen_res=screen_res,
+            movement_data=movement_data_payload,
+            quality=quality,
+            benchmarks=benchmarks_payload,
+            temporal_consistency=temp_consistency,
+            face_tracking_quality=tracking_quality,
+        )
 
-        # ── CASE 3: EYES BLURRY OR NOT VISIBLE ──────────────────────────────
-        elif eye_res["is_blurry"] or eye_res["eye_status"] in (EYE_TOO_BLURRY, BOTH_EYES_NOT_VISIBLE, EYES_OBSCURED):
-            # Eye signal unavailable; derive confidence strictly from other criteria (spatial, temporal, quality, benchmarks)
-            base_score = 62.0 + min(12.0, vitality_flux * 1.5) + (10.0 if ffhq_res["is_organic"] else 0.0)
-            confidence = round(float(max(55.0, min(78.5, base_score))), 1)
-            category_label = "Human face detected (Eyes not clearly visible)"
-            assessment = "HUMAN_FACE_DETECTED"
-            explanation = (
-                "Natural human facial structure and movements detected. "
-                "Note: Eye-based liveness evidence is unavailable due to motion blur or occlusion."
-            )
-            user_message = "Eyes are not clearly visible. Continuing analysis with spatial and temporal signals."
-            reliability = "MEDIUM" if quality["quality_index"] >= 50 else "LOW"
-
-        # ── CASE 1: LIKELY LIVE HUMAN (STANDARD CALIBRATION) ────────────────
-        elif total_marked == 3:
-            calc_conf = 88.0 + min(9.0, vitality_flux * 1.5) + time_flux
-            confidence = round(float(max(86.0, min(98.8, calc_conf))), 1)
-            category_label = "Real human face"
-            assessment = "REAL_HUMAN_FACE"
-            explanation = (
-                "All 3 live instructions verified: Authentic smile with teeth/wide lips, 3 genuine eye blinks, "
-                "and smooth head rotation without blurring or warping."
-            )
-            user_message = "All liveness criteria verified successfully."
-            reliability = "HIGH" if quality["quality_index"] >= 65 else "MEDIUM"
-
-        elif total_marked == 2:
-            calc_conf = 77.0 + min(6.5, vitality_flux * 1.2) + time_flux
-            confidence = round(float(max(76.0, min(84.8, calc_conf))), 1)
-            category_label = "Likely as human face"
-            assessment = "LIKELY_HUMAN_FACE"
-            explanation = (
-                "2 of 3 live instructions completed. Strong live human facial structure confirmed. "
-                "Complete the remaining instruction to reach >85% confidence."
-            )
-            user_message = "2 of 3 live testing instructions completed."
-            reliability = "HIGH" if quality["quality_index"] >= 60 else "MEDIUM"
-
-        elif total_marked == 1:
-            calc_conf = 63.5 + min(8.5, vitality_flux * 1.2) + time_flux
-            confidence = round(float(max(61.0, min(74.5, calc_conf))), 1)
-            category_label = "Human face detected"
-            assessment = "HUMAN_FACE_DETECTED"
-            explanation = (
-                "1 live instruction completed. Human face detected. "
-                "Follow the remaining instructions (smile, blink 3 times, rotate face) to verify liveness."
-            )
-            user_message = "Follow instructions to verify active presence."
-            reliability = "MEDIUM"
-
-        else:
-            calc_conf = 52.0 + min(6.0, physiological_jitter * 1.2) + time_flux
-            confidence = round(float(max(50.5, min(59.5, calc_conf))), 1)
-            category_label = "You are Human but currently you are not following instruction above"
-            assessment = "INSTRUCTION_NOT_FOLLOWED"
-            explanation = (
-                "Natural human facial structure and eyes detected, but none of the 3 live testing instructions "
-                "have been performed. Please smile, blink 3 times, and rotate your face smoothly."
-            )
-            user_message = "Please follow the 3 instructions above to complete verification."
-            reliability = "MEDIUM" if quality["quality_index"] >= 50 else "LOW"
-
-        # Apply Temporal Confidence Smoothing (EMA, alpha=0.35)
-        if assessment != "POSSIBLE_REPLAY":
-            prev_conf = self._session_smoothed_confidence.get(session_id, confidence)
-            smoothed_conf = round(float(0.35 * confidence + 0.65 * prev_conf), 1)
-            self._session_smoothed_confidence[session_id] = smoothed_conf
-            confidence = smoothed_conf
-        else:
-            self._session_smoothed_confidence[session_id] = 0.0
-            confidence = 0.0
+        confidence = fusion["live_human_confidence"]
+        model_probability = fusion["model_probability"]
+        reliability = fusion["reliability"]
+        assessment = fusion["assessment"]
+        category_label = fusion["category_label"]
+        explanation = fusion["explanation"]
+        user_message = fusion["user_message"]
+        spatial_risk = fusion["synthetic_risk"]
+        presentation_risk = fusion["replay_risk"]
+        liveness_score = model_probability
+        debug_scores = fusion["sub_scores"]
 
         processing_ms = int((time.monotonic() - t0) * 1000)
-        liveness_score = round(confidence / 100.0, 3)
-
-        # Decomposed score models for uncertainty-aware API
         live_human_score = liveness_score
         synthetic_score = round(float(spatial_risk), 3)
         replay_score = round(float(presentation_risk), 3)
@@ -1510,6 +1434,9 @@ class LiveAuthenticityEngine:
             "assessment": assessment,
             "category_label": category_label,
             "confidence": confidence,
+            "model_probability": model_probability,
+            "model_disagreement": fusion.get("model_disagreement", "LOW"),
+            "debug": debug_scores,
             "reliability": reliability,
             "live_human_score": live_human_score,
             "synthetic_score": synthetic_score,

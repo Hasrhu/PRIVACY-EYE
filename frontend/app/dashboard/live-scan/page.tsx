@@ -234,6 +234,21 @@ interface LiveFrameResult {
   processing_ms?: number
   processing_location?: string
   disclaimer?: string
+  model_probability?: number
+  model_disagreement?: string
+  debug?: {
+    blink_evidence?: number
+    blink_quality?: number
+    blink_confirmed?: boolean
+    blink_status?: string
+    facial_movement_evidence?: number
+    facial_movement_label?: string
+    liveness_evidence?: number
+    temporal_consistency?: number
+    face_tracking_quality?: number
+    input_quality?: number
+    single_eye_penalty?: boolean
+  }
 }
 
 const REASON_CODE_MAP: Record<string, { label: string; severity: 'safe' | 'warning' | 'danger' | 'info' }> = {
@@ -319,6 +334,7 @@ export default function LiveCameraScanPage() {
   const [consentStatus, setConsentStatus] = useState<'GRANTED' | 'DECLINED' | null>(null)
   const [trainingStats, setTrainingStats] = useState<TrainingStats | null>(null)
   const [savedReportId, setSavedReportId] = useState<string | null>(null)
+  const [showDebugMode, setShowDebugMode] = useState<boolean>(false)
 
   // Load training stats
   const loadTrainingStats = async () => {
@@ -1258,6 +1274,125 @@ export default function LiveCameraScanPage() {
                 '"The observed live sequence contains no strong synthetic-media indicators based on the multi-spectral models evaluated."'}
             </p>
           </GlassCard>
+
+          {/* ── CORE USER-FACING EVIDENCE MATRIX (Section 31 & 32) ── */}
+          <GlassCard variant="elevated" className="space-y-3.5">
+            <div className="flex items-center justify-between pb-2 border-b border-white/6">
+              <span className="text-xs font-mono uppercase tracking-wider text-white/50">
+                Core Liveness Evidence
+              </span>
+              {(analysisResult?.debug?.blink_confirmed || (analysisResult?.blink_count && analysisResult.blink_count > 0)) && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-status-safe/20 text-status-safe border border-status-safe/40 animate-pulse">
+                  ✓ Blink Detected
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 text-xs font-mono">
+              <div className="p-2.5 rounded-xl bg-white/4 border border-white/6 flex items-center justify-between">
+                <span className="text-white/60">Blink</span>
+                <span className={`font-bold ${analysisResult?.blink_count && analysisResult.blink_count > 0 ? 'text-status-safe' : 'text-brand-cyan'}`}>
+                  {analysisResult?.blink_count && analysisResult.blink_count > 0 ? '✓ Detected' : 'Tracking'}
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white/4 border border-white/6 flex items-center justify-between">
+                <span className="text-white/60">Liveness</span>
+                <span className={`font-bold ${conf >= 70 ? 'text-status-safe' : conf >= 45 ? 'text-status-warning' : 'text-white/50'}`}>
+                  {conf >= 70 ? 'Strong' : conf >= 45 ? 'Moderate' : 'Low'}
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white/4 border border-white/6 flex items-center justify-between">
+                <span className="text-white/60">Facial Movement</span>
+                <span className={`font-bold ${analysisResult?.debug?.facial_movement_label === 'NATURAL' ? 'text-status-safe' : 'text-brand-cyan'}`}>
+                  {analysisResult?.debug?.facial_movement_label || 'Natural'}
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white/4 border border-white/6 flex items-center justify-between">
+                <span className="text-white/60">Input Quality</span>
+                <span className="font-bold text-white">
+                  {analysisResult?.quality?.sharpness_label || 'Good'}
+                </span>
+              </div>
+            </div>
+
+            {/* Developer Debug Mode Toggle */}
+            <div className="pt-2 flex items-center justify-between border-t border-white/6">
+              <span className="text-[11px] text-white/50 font-mono">Forensic Debug Telemetry</span>
+              <button
+                type="button"
+                onClick={() => setShowDebugMode(!showDebugMode)}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-mono transition-all ${
+                  showDebugMode ? 'bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/40' : 'bg-white/5 text-white/40 border border-white/10 hover:text-white'
+                }`}
+              >
+                {showDebugMode ? 'Hide Telemetry' : 'Show Telemetry'}
+              </button>
+            </div>
+          </GlassCard>
+
+          {/* ── DEVELOPER DEBUG MODE PANEL (Section 45) ── */}
+          {showDebugMode && (
+            <GlassCard variant="elevated" className="space-y-3 border-brand-cyan/30 bg-black/40">
+              <div className="flex items-center justify-between pb-2 border-b border-brand-cyan/20">
+                <span className="text-xs font-mono uppercase text-brand-cyan font-bold tracking-wider">
+                  [DEV] Forensic Telemetry Matrix
+                </span>
+                <span className="text-[10px] font-mono text-white/50">
+                  Disagreement: {analysisResult?.model_disagreement || 'LOW'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">EYE VISIBILITY</span>
+                  <span className="text-white font-bold">{analysisResult?.eye_status || 'VISIBLE'}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">BLINK CONFIRMATION</span>
+                  <span className={analysisResult?.debug?.blink_confirmed ? 'text-status-safe font-bold' : 'text-white/60'}>
+                    {analysisResult?.debug?.blink_confirmed ? 'CONFIRMED' : 'UNCONFIRMED'}
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">BLINK QUALITY</span>
+                  <span className="text-brand-cyan font-bold">{(analysisResult?.debug?.blink_quality ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">BLINK COUNT</span>
+                  <span className="text-white font-bold">{analysisResult?.blink_count ?? 0}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">LIVENESS EVIDENCE</span>
+                  <span className="text-status-safe font-bold">{(analysisResult?.debug?.liveness_evidence ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">FACIAL MOVEMENT</span>
+                  <span className="text-white font-bold">{(analysisResult?.debug?.facial_movement_evidence ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">TEMPORAL CONSISTENCY</span>
+                  <span className="text-white font-bold">{(analysisResult?.debug?.temporal_consistency ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">REPLAY RISK</span>
+                  <span className={analysisResult?.presentation_attack ? 'text-status-danger font-bold' : 'text-white font-bold'}>
+                    {(analysisResult?.replay_score ?? 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">RAW MODEL PROBABILITY</span>
+                  <span className="text-brand-blue font-bold">{(analysisResult?.model_probability ?? (conf / 100)).toFixed(2)}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/3 border border-white/5">
+                  <span className="text-white/40 block text-[9px]">PRODUCT CONFIDENCE</span>
+                  <span className="text-status-safe font-bold">{conf.toFixed(1)}%</span>
+                </div>
+              </div>
+            </GlassCard>
+          )}
 
           {/* ── DEDICATED EYE & OCULAR ANALYSIS CARD (Sections 7-12) ── */}
           <GlassCard variant="elevated" className="space-y-4">

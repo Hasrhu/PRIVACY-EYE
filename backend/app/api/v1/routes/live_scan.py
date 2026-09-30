@@ -63,6 +63,13 @@ class SaveAuditSessionPayload(BaseModel):
     phone_detected: Optional[bool] = None
     presentation_attack: Optional[bool] = None
     reason_codes: Optional[List[str]] = None
+    model_probability: Optional[float] = None
+    reliability: Optional[str] = None
+    liveness_score: Optional[float] = None
+    facial_movement_score: Optional[float] = None
+    replay_score: Optional[float] = None
+    synthetic_score: Optional[float] = None
+    debug: Optional[dict] = None
 
 
 class ConsentResponsePayload(BaseModel):
@@ -276,6 +283,17 @@ async def save_live_audit_session(
             "quality_index": payload.quality_index,
             "live_mode": True,
             "category_label": payload.category_label or payload.assessment,
+            "model_probability": payload.model_probability,
+            "reliability": payload.reliability,
+            "blink_count": payload.blink_count,
+            "eye_status": payload.eye_status,
+            "phone_detected": payload.phone_detected,
+            "presentation_attack": payload.presentation_attack,
+            "liveness_score": payload.liveness_score,
+            "facial_movement_score": payload.facial_movement_score,
+            "replay_score": payload.replay_score,
+            "synthetic_score": payload.synthetic_score,
+            "debug": payload.debug,
         },
         media_deleted=True,
     )

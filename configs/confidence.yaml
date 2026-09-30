@@ -1,0 +1,60 @@
+# ==============================================================================
+# Privacy Eye — Centralized Confidence & Live Human Scoring Engine Configuration
+# ==============================================================================
+
+# Core Evidence Component Weights (Deterministic Product Fusion)
+weights:
+  blink_weight: 0.70              # Confirmed blink contributes 65%–80% of live-human evidence
+  liveness_movement_weight: 0.15  # Natural facial movement & physiological liveness
+  supporting_weight: 0.15         # Temporal consistency, tracking quality, input quality
+
+# Blink Quality & Confirmation Settings
+blink:
+  min_duration_sec: 0.08          # 80ms minimum for genuine biological human blink
+  max_duration_sec: 0.70          # 700ms maximum duration (longer is prolonged closure)
+  refractory_sec: 0.30            # 300ms refractory period between blinks
+  quality_threshold: 0.65         # Minimum quality required to confirm a blink
+  eye_visibility_threshold: 0.35  # Minimum visibility score to observe eyes
+  single_eye_multiplier: 0.75     # Penalty multiplier when only one eye is observable
+  
+  # Product Confidence Mapping for 1st Confirmed Blink (65%–80% range)
+  # Maps blink_quality [0.65, 1.0] -> [65.0, 80.0]
+  quality_map_min_quality: 0.65
+  quality_map_max_quality: 1.00
+  quality_map_min_confidence: 65.0
+  quality_map_max_confidence: 80.0
+  
+  # Diminishing Returns for Subsequent Blinks
+  second_blink_boost: 5.0         # 2nd blink adds modest boost (+5%)
+  third_blink_boost: 2.0          # 3rd blink adds slight boost (+2%)
+  max_blink_boost: 8.0            # Saturated maximum boost from additional blinks
+
+# Observation & Liveness Challenge Settings
+challenge:
+  no_blink_seconds: 25.0          # 25 seconds of observable eyes before "PLEASE BLINK"
+  challenge_duration: 5.0         # 5 seconds interactive challenge window
+  liveness_confidence_ceiling: 0.28 # 20%–30% ceiling on liveness component if challenge fails
+
+# Movement & Natural Facial Motion Settings
+movement:
+  min_natural_displacement: 0.005 # Below this indicates static photograph replay
+  optimal_displacement: 0.045    # Natural physiological head/facial movement range
+  max_erratic_displacement: 0.25 # Beyond this indicates unstable tracking or erratic motion
+
+# Quality & Environment Thresholds
+quality:
+  min_sharpness_var: 25.0         # Laplacian variance minimum
+  good_sharpness_var: 80.0
+  low_quality_reliability_penalty: 0.30
+
+# Presentation Attack & Replay Overrides
+replay:
+  phone_detected_threshold: 0.65
+  face_in_screen_threshold: 0.60
+  presentation_override_threshold: 0.75 # Hard override to 0% confidence
+
+# Temporal Smoothing & Decision Hysteresis
+temporal:
+  smoothing_factor: 0.35          # EMA alpha for confidence transitions
+  hysteresis_threshold: 3.5       # Prevents jitter between confidence brackets
+  disagreement_threshold: 0.40    # High disagreement triggers UNABLE_TO_DETERMINE / SUSPICIOUS

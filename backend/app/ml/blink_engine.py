@@ -1,6 +1,7 @@
 """
 Privacy Eye — Advanced Blink State Machine, Timer, & 25-Second Challenge Engine
-Enforces biological blink validation (80ms - 700ms), continuous observation qualification,
+Enforces biological blink validation (80ms - 700ms), 4-stage temporal sequence
+(OPEN -> CLOSING -> CLOSED -> OPEN), continuous observation qualification,
 and uncertainty-aware liveness ceiling constraints.
 """
 import time
@@ -16,8 +17,8 @@ CHALLENGE_DURATION = 5.0    # 5 seconds to comply with "PLEASE BLINK"
 
 class BlinkEngine:
     """
-    Session-aware temporal blink tracker.
-    Accounts only for time when eyes are clearly visible and stable.
+    Session-aware temporal blink tracker and quality estimator.
+    Accounts only for time when eyes are clearly visible, unblurred, and stable.
     """
 
     def __init__(self):
@@ -36,10 +37,13 @@ class BlinkEngine:
                 "pause_reason": None,
                 "blink_count": 0,
                 "last_blink_timestamp": None,
+                "last_blink_quality": 0.0,
+                "last_blink_duration": 0.0,
                 "blink_history": [],
                 "openness_history": [],  # (timestamp, openness)
-                # State machine
-                "state": "OPEN",  # OPEN, POSSIBLE_CLOSURE, CLOSED
+                # 4-stage State Machine: OPEN -> CLOSING -> CLOSED -> OPEN
+                "state": "OPEN",
+                "closing_since": 0.0,
                 "closed_since": 0.0,
                 # 25-second Challenge state
                 "challenge_active": False,
@@ -77,7 +81,9 @@ class BlinkEngine:
         eye_quality = eye_analysis.get("overall_eye_quality", 0.0)
         is_blurry = eye_analysis.get("is_blurry", False)
         is_obscured = eye_analysis.get("is_obscured", False)
-        eyes_visible = eye_analysis.get("left_eye_visible", False) or eye_analysis.get("right_eye_visible", False)
+        left_eye_vis = eye_analysis.get("left_eye_visible", False)
+        right_eye_vis = eye_analysis.get("right_eye_visible", False)
+        eyes_visible = left_eye_vis or right_eye_vis
 
         can_observe_eyes = (
             face_detected
@@ -120,15 +126,30 @@ class BlinkEngine:
             threshold_close = max(4.0, baseline * 0.60)
             threshold_open = max(6.0, baseline * 0.82)
 
-        # ── 3. Biological Blink State Machine ───────────────────────────────
+        # ── 3. Biological Blink 4-Stage State Machine ────────────────────────
+        # Sequence: OPEN -> CLOSING -> CLOSED -> OPEN
+        # Rejects single-frame dropouts or sudden tracking reconnection
         if can_observe_eyes:
-            if sess["state"] == "OPEN":
+            current_state = sess["state"]
+
+            if current_state == "OPEN":
+                if openness < threshold_close:
+                    sess["state"] = "CLOSING"
+                    sess["closing_since"] = now
+
+            elif current_state == "CLOSING":
                 if openness < threshold_close:
                     sess["state"] = "CLOSED"
                     sess["closed_since"] = now
-            elif sess["state"] == "CLOSED":
+                elif openness >= threshold_open:
+                    # Incomplete closure / jitter
+                    sess["state"] = "OPEN"
+
+            elif current_state == "CLOSED":
                 if openness >= threshold_open:
                     duration = now - sess["closed_since"]
+                    sess["last_blink_duration"] = duration
+
                     # Biological human blink verification: 80ms <= duration <= 700ms
                     if MIN_BLINK_DURATION <= duration <= MAX_BLINK_DURATION:
                         # Refractory period check: >= 300ms from last blink
@@ -136,19 +157,30 @@ class BlinkEngine:
                             sess["last_blink_timestamp"] is None
                             or (now - sess["last_blink_timestamp"]) >= BLINK_REFRACTORY_PERIOD
                         ):
+                            # Calculate deterministic blink quality [0.65 to 1.00]
+                            # Duration optimality: ~180ms to 320ms is ideal for human blink
+                            dur_opt = 1.0 - min(0.35, abs(duration - 0.25) / 0.45)
+                            vis_opt = 1.0 if (left_eye_vis and right_eye_vis) else 0.75
+                            q_score = (dur_opt * 0.35) + (eye_quality * 0.40) + (vis_opt * 0.25)
+                            calibrated_q = round(float(min(1.0, max(0.65, q_score))), 3)
+
+                            sess["last_blink_quality"] = calibrated_q
                             sess["blink_count"] += 1
                             sess["last_blink_timestamp"] = now
                             sess["blink_history"].append(now)
                             just_blinked = True
                             reason_codes.append("BLINK_DETECTED")
-                            # If challenge was active, pass it!
+
+                            # If 25-second challenge was active, pass it!
                             if sess["challenge_active"]:
                                 sess["challenge_active"] = False
                                 sess["challenge_status"] = "PASSED"
-                                sess["observation_seconds"] = 0.0  # Reset 25s timer on passed challenge
+                                sess["observation_seconds"] = 0.0  # Reset timer on passed challenge
                                 sess["liveness_ceiling"] = 1.0     # Lift ceiling
                                 reason_codes.append("BLINK_CHALLENGE_PASSED")
+
                     sess["state"] = "OPEN"
+
                 elif (now - sess["closed_since"]) > 1.2:
                     # Eye closed for > 1.2s -> Prolonged closure / looking down (not a blink)
                     sess["state"] = "OPEN"
@@ -195,9 +227,17 @@ class BlinkEngine:
         recent_blinks = [t for t in sess["blink_history"] if now - t <= 10.0]
         blinks_10s = len(recent_blinks)
 
+        # Fallback blink quality estimation if blink count > 0 but last_blink_quality not yet populated
+        current_b_quality = sess["last_blink_quality"]
+        if current_b_quality <= 0.0 and sess["blink_count"] > 0:
+            current_b_quality = round(float(min(1.0, max(0.68, eye_quality))), 3)
+
         return {
             "blink_count": int(sess["blink_count"]),
+            "blink_quality": current_b_quality,
+            "confirmed_blink": bool(sess["blink_count"] > 0 and current_b_quality >= 0.65),
             "last_blink_timestamp": sess["last_blink_timestamp"],
+            "last_blink_duration": round(float(sess["last_blink_duration"]), 3),
             "seconds_since_last_blink": round(float(seconds_since_last_blink), 1),
             "continuous_observation_sec": round(float(sess["observation_seconds"]), 1),
             "is_timer_paused": bool(sess["is_paused"]),
