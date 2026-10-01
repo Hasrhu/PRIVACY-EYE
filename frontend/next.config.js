@@ -19,7 +19,13 @@ const nextConfig = {
     ]
   },
   async rewrites() {
-    const rawBackend = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    let rawBackend = process.env.BACKEND_API_URL;
+    if (!rawBackend && process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.startsWith('http')) {
+      rawBackend = process.env.NEXT_PUBLIC_API_URL;
+    }
+    if (!rawBackend) {
+      rawBackend = 'http://127.0.0.1:8000';
+    }
     const backendUrl = rawBackend.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
     return [
       {
