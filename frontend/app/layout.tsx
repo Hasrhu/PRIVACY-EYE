@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import { AmbientBackground } from '@/components/layout/AmbientBackground'
+import { AuthProvider } from '@/contexts/AuthContext'
 
 export const metadata: Metadata = {
   title: { default: 'Privacy Eye — See Through The Fake', template: '%s | Privacy Eye' },
@@ -22,9 +23,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-canvas text-white font-sans antialiased selection:bg-brand-blue/30 selection:text-white">
         <AmbientBackground />
-        <div className="relative z-10 min-h-screen flex flex-col">
-          {children}
-        </div>
+        <AuthProvider>
+          <div className="relative z-10 min-h-screen flex flex-col">
+            {children}
+          </div>
+        </AuthProvider>
         <Toaster
           position="top-right"
           toastOptions={{

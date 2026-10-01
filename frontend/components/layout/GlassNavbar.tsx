@@ -21,7 +21,7 @@ import {
 import clsx from 'clsx'
 import Cookies from 'js-cookie'
 import { BrandLogo } from './BrandLogo'
-import { authApi } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface NavItem {
   href: string
@@ -42,21 +42,13 @@ const NAV_ITEMS: NavItem[] = [
 export const GlassNavbar: React.FC = () => {
   const pathname = usePathname()
   const router = useRouter()
+  const { user, logout } = useAuth()
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
   const profileRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Attempt to load current user
-    const token = Cookies.get('access_token')
-    if (token) {
-      authApi.me().then((res) => {
-        setUserEmail(res.data.email)
-      }).catch(() => {})
-    }
-
     const handleClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false)
@@ -69,9 +61,9 @@ export const GlassNavbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const handleLogout = () => {
-    authApi.logout()
-    router.push('/auth/login')
+  const handleLogout = async () => {
+    setProfileOpen(false)
+    await logout()
   }
 
   return (
@@ -164,7 +156,7 @@ export const GlassNavbar: React.FC = () => {
                 className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-2xl bg-white/5 border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition-all"
               >
                 <div className="w-6 h-6 rounded-xl bg-gradient-to-br from-brand-blue to-brand-violet flex items-center justify-center text-xs font-bold text-white shadow-sm">
-                  {userEmail ? userEmail.charAt(0).toUpperCase() : 'P'}
+                  {user?.full_name ? user.full_name.charAt(0).toUpperCase() : (user?.email ? user.email.charAt(0).toUpperCase() : 'P')}
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-white/50" />
               </button>
@@ -173,9 +165,11 @@ export const GlassNavbar: React.FC = () => {
                 <div className="absolute right-0 mt-3 w-56 p-2 rounded-3xl glass-floating border border-white/15 shadow-glass-floating z-50">
                   <div className="px-3 py-2.5 border-b border-white/8">
                     <p className="text-xs font-semibold text-white truncate">
-                      {userEmail || 'Security Admin'}
+                      {user?.full_name || user?.email || 'Authenticated User'}
                     </p>
-                    <p className="text-[10px] text-brand-blue font-mono mt-0.5">Enterprise Tier</p>
+                    <p className="text-[10px] text-brand-blue font-mono mt-0.5 truncate">
+                      {user?.email || 'Active Session'} • {user?.role || 'USER'}
+                    </p>
                   </div>
                   <div className="py-1.5 space-y-0.5">
                     <Link

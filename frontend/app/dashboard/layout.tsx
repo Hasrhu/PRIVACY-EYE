@@ -1,25 +1,24 @@
 'use client'
-import React, { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Cookies from 'js-cookie'
+import React, { useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 import { GlassNavbar } from '@/components/layout/GlassNavbar'
 import { Footer } from '@/components/layout/Footer'
 import { Eye } from 'lucide-react'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const pathname = usePathname()
+  const { isAuthenticated, isLoading } = useAuth()
 
   useEffect(() => {
-    const token = Cookies.get('access_token')
-    if (!token) {
-      router.push('/auth/login')
-    } else {
-      setIsAuthenticated(true)
+    if (!isLoading && !isAuthenticated) {
+      const target = pathname ? `/auth/login?next=${encodeURIComponent(pathname)}` : '/auth/login'
+      router.push(target)
     }
-  }, [router])
+  }, [isAuthenticated, isLoading, pathname, router])
 
-  if (!isAuthenticated) {
+  if (isLoading || !isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-canvas">
         <div className="flex flex-col items-center gap-3">
@@ -36,15 +35,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen flex flex-col bg-canvas text-white selection:bg-brand-blue/30">
-      {/* Floating Glass Navigation */}
       <GlassNavbar />
-
-      {/* Main Page Canvas with Top Clearance for Floating Navbar */}
       <main className="flex-1 pt-28 pb-16 px-4 md:px-8 max-w-7xl mx-auto w-full">
         {children}
       </main>
-
-      {/* Minimal Cybersecurity Footer */}
       <Footer />
     </div>
   )

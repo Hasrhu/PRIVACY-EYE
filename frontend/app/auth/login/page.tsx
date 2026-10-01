@@ -1,13 +1,14 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useState, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, ArrowRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-import { authApi, getErrorMessage } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
+import { getErrorMessage } from '@/lib/api'
 import { BrandLogo } from '@/components/layout/BrandLogo'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { GlassButton } from '@/components/ui/GlassButton'
@@ -15,24 +16,33 @@ import { GlassButton } from '@/components/ui/GlassButton'
 interface LoginForm {
   email: string
   password: string
+  remember_me: boolean
 }
 
-export default function LoginPage() {
+function LoginFormContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const nextUrl = searchParams.get('next') || '/dashboard'
+  const { login } = useAuth()
+
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginForm>()
+  } = useForm<LoginForm>({
+    defaultValues: {
+      remember_me: true,
+    },
+  })
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true)
     try {
-      await authApi.login(data.email, data.password)
+      await login(data.email, data.password, data.remember_me)
       toast.success('Authentication confirmed.')
-      router.push('/dashboard')
+      router.push(nextUrl)
     } catch (err) {
       toast.error(getErrorMessage(err))
     } finally {
@@ -85,9 +95,12 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-semibold text-white/70">Password</label>
-                <span className="text-[11px] text-brand-blue cursor-pointer hover:underline">
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-[11px] text-brand-blue cursor-pointer hover:underline"
+                >
                   Forgot?
-                </span>
+                </Link>
               </div>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
@@ -110,6 +123,20 @@ export default function LoginPage() {
               )}
             </div>
 
+            {/* Remember Me Checkbox */}
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded bg-white/10 border-white/20 text-brand-blue focus:ring-brand-blue/30 focus:ring-offset-0 transition-colors"
+                  {...register('remember_me')}
+                />
+                <span className="text-xs text-white/70 hover:text-white transition-colors">
+                  Remember me on this device
+                </span>
+              </label>
+            </div>
+
             <GlassButton
               type="submit"
               variant="primary"
@@ -125,11 +152,19 @@ export default function LoginPage() {
           <div className="pt-4 border-t border-white/6 text-center text-xs text-white/50">
             Don't have an account?{' '}
             <Link href="/auth/register" className="text-brand-blue font-semibold hover:underline">
-              Create an account
+              Create Account
             </Link>
           </div>
         </GlassCard>
       </motion.div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-canvas" />}>
+      <LoginFormContent />
+    </Suspense>
   )
 }

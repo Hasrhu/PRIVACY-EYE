@@ -12,6 +12,7 @@ from enum import Enum
 class UserRegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    confirm_password: Optional[str] = None
     full_name: Optional[str] = Field(None, max_length=200)
 
     @field_validator("password")
@@ -27,6 +28,7 @@ class UserRegisterRequest(BaseModel):
 class UserLoginRequest(BaseModel):
     email: EmailStr
     password: str
+    remember_me: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -36,15 +38,63 @@ class TokenResponse(BaseModel):
     expires_in: int  # seconds
 
 
+class UserPreferencesResponse(BaseModel):
+    theme: str = "dark"
+    language: str = "en"
+    notifications_enabled: bool = True
+    privacy_mode: bool = True
+    cloud_processing_enabled: bool = False
+
+    model_config = {"from_attributes": True}
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
-    full_name: Optional[str]
+    full_name: Optional[str] = None
     role: str
     is_verified: bool
     scans_used_this_month: int
     scans_limit: int
     created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AuthSuccessResponse(BaseModel):
+    user: UserResponse
+    tokens: TokenResponse
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_password: Optional[str] = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_password: Optional[str] = None
+
+
+class DeleteAccountRequest(BaseModel):
+    password_confirmation: str
+
+
+class SessionResponse(BaseModel):
+    id: str
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    is_current: bool = False
+    is_remember_me: bool = False
+    created_at: datetime
+    last_used_at: datetime
+    expires_at: datetime
 
     model_config = {"from_attributes": True}
 

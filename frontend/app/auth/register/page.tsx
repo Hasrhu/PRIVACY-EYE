@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, Lock, Mail, User, ArrowRight, Check, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, User, ArrowRight, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-import { authApi, getErrorMessage } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
+import { getErrorMessage } from '@/lib/api'
 import { BrandLogo } from '@/components/layout/BrandLogo'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { GlassButton } from '@/components/ui/GlassButton'
@@ -16,11 +17,15 @@ interface RegisterForm {
   full_name: string
   email: string
   password: string
+  confirm_password: string
+  accept_terms: boolean
 }
 
 export default function RegisterPage() {
   const router = useRouter()
+  const { register: authRegister } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const {
     register,
@@ -38,10 +43,18 @@ export default function RegisterPage() {
   ]
 
   const onSubmit = async (data: RegisterForm) => {
+    if (!data.accept_terms) {
+      toast.error('You must accept the terms of service to proceed.')
+      return
+    }
+    if (data.password !== data.confirm_password) {
+      toast.error('Passwords do not match.')
+      return
+    }
+
     setLoading(true)
     try {
-      await authApi.register(data.email, data.password, data.full_name)
-      await authApi.login(data.email, data.password)
+      await authRegister(data.email, data.password, data.confirm_password, data.full_name)
       toast.success('Account created! Welcome to Privacy Eye.')
       router.push('/dashboard')
     } catch (err) {
@@ -61,7 +74,7 @@ export default function RegisterPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
+        className="w-full max-w-md my-8"
       >
         <div className="flex justify-center mb-8">
           <BrandLogo size="lg" />
@@ -83,9 +96,9 @@ export default function RegisterPage() {
                 <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="text"
-                  placeholder="Security Specialist"
+                  placeholder="Harshvardhan"
                   className="glass-input pl-11"
-                  {...register('full_name', { required: 'Name is required' })}
+                  {...register('full_name', { required: 'Full name is required' })}
                 />
               </div>
               {errors.full_name && (
@@ -94,12 +107,12 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-white/70">Work Email</label>
+              <label className="block text-xs font-semibold text-white/70">Email Address</label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="email"
-                  placeholder="specialist@agency.gov"
+                  placeholder="analyst@agency.gov"
                   className="glass-input pl-11"
                   {...register('email', { required: 'Email address is required' })}
                 />
@@ -145,6 +158,52 @@ export default function RegisterPage() {
                   </span>
                 ))}
               </div>
+              {errors.password && (
+                <p className="text-xs text-status-danger">{errors.password.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-white/70">Confirm Password</label>
+              <div className="relative">
+                <Lock className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="••••••••••••"
+                  className="glass-input pl-11 pr-11"
+                  {...register('confirm_password', {
+                    required: 'Confirming password is required',
+                    validate: (val) => val === password || 'Passwords do not match',
+                  })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {errors.confirm_password && (
+                <p className="text-xs text-status-danger">{errors.confirm_password.message}</p>
+              )}
+            </div>
+
+            {/* Accept Terms Checkbox */}
+            <div className="pt-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded bg-white/10 border-white/20 text-brand-blue focus:ring-brand-blue/30 focus:ring-offset-0 transition-colors"
+                  {...register('accept_terms', { required: 'You must accept the terms' })}
+                />
+                <span className="text-xs text-white/70 hover:text-white transition-colors">
+                  I accept the Privacy Eye terms & privacy policy
+                </span>
+              </label>
+              {errors.accept_terms && (
+                <p className="text-xs text-status-danger mt-1">{errors.accept_terms.message}</p>
+              )}
             </div>
 
             <GlassButton
@@ -155,12 +214,12 @@ export default function RegisterPage() {
               className="w-full shadow-glow-blue mt-2"
               icon={<ArrowRight className="w-4 h-4" />}
             >
-              Register & Initialize
+              Create Account
             </GlassButton>
           </form>
 
           <div className="pt-4 border-t border-white/6 text-center text-xs text-white/50">
-            Already have an active key?{' '}
+            Already have an account?{' '}
             <Link href="/auth/login" className="text-brand-blue font-semibold hover:underline">
               Sign In
             </Link>

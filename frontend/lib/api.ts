@@ -9,6 +9,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v
 export const api = axios.create({
   baseURL: BASE_URL,
   timeout: 120_000, // 2 min for video uploads
+  withCredentials: true, // Support HttpOnly SameSite authentication cookies
 })
 
 // Attach JWT on every request
@@ -22,23 +23,24 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   async (err: AxiosError) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && !err.config?.url?.includes('/auth/login') && !err.config?.url?.includes('/auth/refresh')) {
       const refresh = Cookies.get('refresh_token')
-      if (refresh) {
-        try {
-          const res = await axios.post(`${BASE_URL}/auth/refresh`, null, {
-            params: { refresh_token: refresh },
-          })
-          const { access_token } = res.data
-          Cookies.set('access_token', access_token, { secure: true, sameSite: 'strict' })
-          if (err.config) {
-            err.config.headers.Authorization = `Bearer ${access_token}`
-            return api.request(err.config)
-          }
-        } catch {
-          Cookies.remove('access_token')
-          Cookies.remove('refresh_token')
-          window.location.href = '/auth/login'
+      try {
+        const res = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refresh }, { withCredentials: true })
+        const { access_token, refresh_token: new_refresh } = res.data
+        Cookies.set('access_token', access_token, { secure: window.location.protocol === 'https:', sameSite: 'lax', expires: 7 })
+        if (new_refresh) {
+          Cookies.set('refresh_token', new_refresh, { secure: window.location.protocol === 'https:', sameSite: 'lax', expires: 30 })
+        }
+        if (err.config) {
+          err.config.headers.Authorization = `Bearer ${access_token}`
+          return api.request(err.config)
+        }
+      } catch {
+        Cookies.remove('access_token')
+        Cookies.remove('refresh_token')
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth/')) {
+          window.location.href = `/auth/login?next=${encodeURIComponent(window.location.pathname)}`
         }
       }
     }
@@ -48,23 +50,68 @@ api.interceptors.response.use(
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
-  register: (email: string, password: string, full_name?: string) =>
-    api.post('/auth/register', { email, password, full_name }),
+  register: async (email: string, password: string, confirm_password?: string, full_name?: string) => {
+    const res = await api.post('/auth/register', { email, password, confirm_password, full_name })
+    const tokens = res.data.tokens || res.data
+    if (tokens?.access_token) {
+      Cookies.set('access_token', tokens.access_token, { secure: window.location.protocol === 'https:', sameSite: 'lax', expires: 30 })
+    }
+    if (tokens?.refresh_token) {
+      Cookies.set('refresh_token', tokens.refresh_token, { secure: window.location.protocol === 'https:', sameSite: 'lax', expires: 30 })
+    }
+    return res.data
+  },
 
-  login: async (email: string, password: string) => {
-    const res = await api.post('/auth/login', { email, password })
-    const { access_token, refresh_token } = res.data
-    Cookies.set('access_token',  access_token,  { secure: true, sameSite: 'strict', expires: 1 })
-    Cookies.set('refresh_token', refresh_token, { secure: true, sameSite: 'strict', expires: 7 })
+  login: async (email: string, password: string, remember_me: boolean = false) => {
+    const res = await api.post('/auth/login', { email, password, remember_me })
+    const tokens = res.data.tokens || res.data
+    const expiresDays = remember_me ? 30 : 1
+    if (tokens?.access_token) {
+      Cookies.set('access_token', tokens.access_token, { secure: window.location.protocol === 'https:', sameSite: 'lax', expires: expiresDays })
+    }
+    if (tokens?.refresh_token) {
+      Cookies.set('refresh_token', tokens.refresh_token, { secure: window.location.protocol === 'https:', sameSite: 'lax', expires: expiresDays })
+    }
     return res.data
   },
 
   me: () => api.get('/auth/me'),
 
-  logout: () => {
-    Cookies.remove('access_token')
-    Cookies.remove('refresh_token')
+  logout: async () => {
+    try {
+      return await api.post('/auth/logout')
+    } catch {
+      // ignore
+    } finally {
+      Cookies.remove('access_token')
+      Cookies.remove('refresh_token')
+    }
   },
+
+  logoutAll: async () => {
+    try {
+      return await api.post('/auth/logout-all')
+    } finally {
+      Cookies.remove('access_token')
+      Cookies.remove('refresh_token')
+    }
+  },
+
+  changePassword: (current_password: string, new_password: string, confirm_password?: string) =>
+    api.post('/auth/change-password', { current_password, new_password, confirm_password }),
+
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, new_password: string, confirm_password?: string) =>
+    api.post('/auth/reset-password', { token, new_password, confirm_password }),
+
+  getSessions: () => api.get('/auth/sessions'),
+
+  deleteSession: (session_id: string) => api.delete(`/auth/sessions/${session_id}`),
+
+  deleteAccount: (password_confirmation: string) =>
+    api.delete('/users/me', { data: { password_confirmation } }),
 }
 
 // ── Analysis ──────────────────────────────────────────────────────────────────
