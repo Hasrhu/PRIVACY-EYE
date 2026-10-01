@@ -1,0 +1,12 @@
+# ==============================================================================
+# Privacy Eye — Railway Deployment Configuration (Root Monorepo)
+# ==============================================================================
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "backend/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

@@ -1,0 +1,15 @@
+# ==============================================================================
+# Privacy Eye — Nixpacks Configuration for Railway
+# ==============================================================================
+[phases.setup]
+nixPkgs = ["python311", "ffmpeg", "libsndfile", "libGL", "glib"]
+
+[phases.install]
+cmds = [
+  "python -m pip install --upgrade pip",
+  "pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu",
+  "pip install --no-cache-dir -r requirements.txt"
+]
+
+[start]
+cmd = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"

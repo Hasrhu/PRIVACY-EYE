@@ -40,8 +40,8 @@ app = FastAPI(
         "Results are probabilistic indicators — not definitive conclusions."
     ),
     version=settings.APP_VERSION,
-    docs_url="/docs" if settings.APP_ENV != "production" else None,
-    redoc_url="/redoc" if settings.APP_ENV != "production" else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
@@ -53,10 +53,11 @@ cors_origins = settings.CORS_ORIGINS
 if isinstance(cors_origins, str):
     cors_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
 
+# In production, allow configured origins plus dynamic Vercel preview/production domains
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if settings.APP_ENV == "production" else ["*"],
-    allow_origin_regex=None if settings.APP_ENV == "production" else r"^https?://.*",
+    allow_origins=cors_origins if ("*" not in cors_origins) else ["*"],
+    allow_origin_regex=r"^https?://.*" if ("*" in cors_origins or settings.APP_ENV != "production") else r"^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
