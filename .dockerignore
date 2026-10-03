@@ -1,0 +1,39 @@
+# Git
+.git
+.github
+
+# Frontend & Docs (backend image only needs backend source)
+frontend/
+docs/
+*.md
+
+# Python caches & virtual environments
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.venv
+venv
+env
+
+# Local Databases & storage (do not bundle local SQLite into container image)
+*.db
+*.sqlite
+*.sqlite3
+privacyeye.db
+tmp/
+temp/
+uploads/
+models_cache/
+
+# Environment files & secrets
+.env
+.env.*
+!.env.example
+*.log
+
+# Tests
+backend/tests/

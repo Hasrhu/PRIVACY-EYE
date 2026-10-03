@@ -52,8 +52,8 @@ git push origin main
 ### Step 3: Configure Service Settings
 1. Click on the newly created service tile in your Railway canvas.
 2. Go to the **"Settings"** tab:
-   - **Root Directory**: Enter `/backend` (or leave empty if using root `railway.toml`).
-   - **Builder**: Select **Dockerfile** (Railway will automatically detect `backend/Dockerfile`).
+   - **Root Directory**: Leave empty `/` (Railway will automatically use root `Dockerfile` and `railway.toml`).
+   - **Builder**: Select **Dockerfile** (Railway automatically detects root `Dockerfile`).
 3. Under **"Networking"**, click **"Generate Domain"** to create a public URL (e.g. `https://privacy-eye-production.up.railway.app`).
 
 ### Step 4: Configure Environment Variables
