@@ -84,6 +84,7 @@ class User(Base):
     reports: Mapped[List["Report"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     sessions: Mapped[List["UserSession"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     preferences: Mapped[Optional["UserPreferences"]] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
+    scan_reports: Mapped[List["ScanReport"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
@@ -391,3 +392,93 @@ class LiveSession(Base):
     status: Mapped[str] = mapped_column(String(50), default="ACTIVE")
     total_frames_analyzed: Mapped[int] = mapped_column(Integer, default=0)
     avg_latency_ms: Mapped[Optional[float]] = mapped_column(Float)
+
+
+# ── Scan Reports (Live Camera Audit Trail & Evidence) ───────────────────────
+
+class ScanReport(Base):
+    __tablename__ = "scan_reports"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    report_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    live_session_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+
+    # Inference Results Snapshot
+    assessment: Mapped[str] = mapped_column(String(100), nullable=False)
+    category_label: Mapped[Optional[str]] = mapped_column(String(200))
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    reliability: Mapped[str] = mapped_column(String(50), nullable=False, default="MEDIUM")
+
+    # Environmental & Quality
+    input_quality: Mapped[str] = mapped_column(String(50), default="GOOD")
+    processing_location: Mapped[str] = mapped_column(String(100), default="EDGE / LOCAL SERVER")
+
+    # Storage references
+    has_face_capture: Mapped[bool] = mapped_column(Boolean, default=False)
+    face_capture_storage_key: Mapped[Optional[str]] = mapped_column(String(500))
+    jpg_report_storage_key: Mapped[Optional[str]] = mapped_column(String(500))
+    pdf_report_storage_key: Mapped[Optional[str]] = mapped_column(String(500))
+
+    # Report lifecycle
+    report_status: Mapped[str] = mapped_column(String(50), default="COMPLETED")  # GENERATING, COMPLETED, FAILED, PARTIAL
+
+    # Model & Preprocessing Governance
+    model_name: Mapped[str] = mapped_column(String(100), default="YuNet-DeepLearning-Face")
+    model_version: Mapped[str] = mapped_column(String(50), default="v1.2.0")
+    preprocessing_version: Mapped[str] = mapped_column(String(50), default="v1.2.0-spatial-fft")
+    fusion_version: Mapped[str] = mapped_column(String(50), default="v1.4.0-guided-multisignal")
+    calibration_version: Mapped[str] = mapped_column(String(50), default="v1.2.5-temperature")
+
+    # Multi-face tracking association
+    target_face_id: Mapped[Optional[str]] = mapped_column(String(50), default="Face 1")
+    faces_detected_count: Mapped[int] = mapped_column(Integer, default=1)
+
+    # Explanation summary & Why reasons
+    explanation: Mapped[Optional[str]] = mapped_column(Text)
+    why_reasons: Mapped[Optional[list]] = mapped_column(JSON)
+    raw_snapshot: Mapped[Optional[dict]] = mapped_column(JSON)
+
+    # Soft delete & Timestamps
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="scan_reports")
+    signals: Mapped[List["ScanReportSignal"]] = relationship(back_populates="report", cascade="all, delete-orphan", lazy="selectin")
+    tests: Mapped[List["ScanReportTest"]] = relationship(back_populates="report", cascade="all, delete-orphan", lazy="selectin")
+
+    __table_args__ = (
+        Index("ix_scan_reports_user_created", "user_id", "created_at"),
+        Index("ix_scan_reports_session_user", "live_session_id", "user_id"),
+    )
+
+
+class ScanReportSignal(Base):
+    __tablename__ = "scan_report_signals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    report_id: Mapped[str] = mapped_column(String(36), ForeignKey("scan_reports.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    signal_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    signal_value: Mapped[str] = mapped_column(String(200), nullable=False)
+    signal_status: Mapped[str] = mapped_column(String(50), nullable=False)  # PASS, FAIL, WARNING, INFO
+    signal_explanation: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    report: Mapped["ScanReport"] = relationship(back_populates="signals")
+
+
+class ScanReportTest(Base):
+    __tablename__ = "scan_report_tests"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    report_id: Mapped[str] = mapped_column(String(36), ForeignKey("scan_reports.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    test_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)  # PASS, FAIL, WARNING, NOT_AVAILABLE, NOT_APPLICABLE
+    score: Mapped[Optional[float]] = mapped_column(Float)
+    message: Mapped[Optional[Text]] = mapped_column(Text)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    report: Mapped["ScanReport"] = relationship(back_populates="tests")

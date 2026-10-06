@@ -1,35 +1,38 @@
 """
-Privacy Eye — Reports Routes
-Unified reporting controller supporting both:
-1. Live Camera Scan Reports (biometric face capture, test matrices, PDF/JPG evidence dossiers)
-2. Media Analysis Evidence Reports (image/video/audio AI reports)
+Privacy Eye — Scan Reports API Routes
+Endpoints:
+- POST   /api/v1/reports            — Create persistent Scan Report from completed live scan
+- GET    /api/v1/reports            — List authenticated user's scan reports (paginated & filtered)
+- GET    /api/v1/reports/{id}       — Retrieve full scan report forensic details
+- GET    /api/v1/reports/{id}/face  — Download/stream representative captured face image
+- GET    /api/v1/reports/{id}/jpg   — Download high-resolution single-page JPG report card
+- GET    /api/v1/reports/{id}/pdf   — Download official multi-page A4 PDF evidence dossier
+- DELETE /api/v1/reports/{id}       — Delete report and purge all associated storage artifacts
+- GET    /api/v1/reports/admin/all  — Admin review of all system reports (role-protected)
 """
-import json
 import base64
 import math
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.database.session import get_db
-from app.database.models import MediaAnalysis, Report, AnalysisStatus, User, UserRole, ScanReport
+from app.core.security import get_current_user
+from app.database.models import User, UserRole
 from app.schemas.schemas import (
-    ReportResponse,
     ScanReportCreateRequest,
     ScanReportResponse,
     ScanReportListResponse,
     ScanReportSignalResponse,
     ScanReportTestResponse,
 )
-from app.core.security import get_current_user
-from app.services.report_service import report_service
 from app.services.scan_report_service import scan_report_service
 
 router = APIRouter()
 
 
-def _format_scan_report_response(report: ScanReport) -> ScanReportResponse:
+def _format_report_response(report) -> ScanReportResponse:
     """Helper to convert ORM ScanReport to ScanReportResponse schema."""
     signals_resp = [
         ScanReportSignalResponse(
@@ -88,8 +91,6 @@ def _format_scan_report_response(report: ScanReport) -> ScanReportResponse:
     )
 
 
-# ── SCAN REPORT ENDPOINTS (SECTION 18) ───────────────────────────────────────
-
 @router.post("", response_model=ScanReportResponse, status_code=status.HTTP_201_CREATED)
 async def create_scan_report(
     payload: ScanReportCreateRequest,
@@ -97,8 +98,8 @@ async def create_scan_report(
     current_user: User = Depends(get_current_user),
 ):
     """
-    POST /api/v1/reports
-    Creates a persistent scan report record with face capture, test results, signals, and PDF/JPG generation.
+    Creates an authoritative persistent Scan Report from completed live camera analysis.
+    Consumes the exact inference snapshot emitted by the core model.
     """
     if not payload.live_session_id:
         raise HTTPException(status_code=400, detail="live_session_id is required")
@@ -124,13 +125,13 @@ async def create_scan_report(
             representative_frame_bytes=face_bytes,
             save_face_capture=payload.save_face_capture,
         )
-        return _format_scan_report_response(report)
+        return _format_report_response(report)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate scan report: {str(e)}")
 
 
 @router.get("", response_model=ScanReportListResponse)
-async def list_reports(
+async def list_scan_reports(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     assessment: Optional[str] = Query(None),
@@ -139,8 +140,7 @@ async def list_reports(
     current_user: User = Depends(get_current_user),
 ):
     """
-    GET /api/v1/reports
-    Lists authenticated user's scan reports with pagination and filtering.
+    Lists scan reports belonging to the authenticated user.
     """
     items, total = await scan_report_service.list_reports(
         db=db,
@@ -150,9 +150,10 @@ async def list_reports(
         assessment_filter=assessment,
         search_query=search,
     )
+
     pages = math.ceil(total / per_page) if total > 0 else 1
     return ScanReportListResponse(
-        items=[_format_scan_report_response(r) for r in items],
+        items=[_format_report_response(r) for r in items],
         total=total,
         page=page,
         per_page=per_page,
@@ -169,8 +170,7 @@ async def admin_list_all_reports(
     current_user: User = Depends(get_current_user),
 ):
     """
-    GET /api/v1/reports/admin/all
-    Admin-only inspection of reports across all users.
+    Admin-only review of all scan reports across all accounts.
     """
     try:
         items, total = await scan_report_service.admin_list_reports(
@@ -182,7 +182,7 @@ async def admin_list_all_reports(
         )
         pages = math.ceil(total / per_page) if total > 0 else 1
         return ScanReportListResponse(
-            items=[_format_scan_report_response(r) for r in items],
+            items=[_format_report_response(r) for r in items],
             total=total,
             page=page,
             per_page=per_page,
@@ -192,21 +192,42 @@ async def admin_list_all_reports(
         raise HTTPException(status_code=403, detail=str(e))
 
 
-@router.get("/{id}/face")
-async def download_report_face_capture(
-    id: str,
+@router.get("/{report_id}", response_model=ScanReportResponse)
+async def get_scan_report(
+    report_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    GET /api/v1/reports/{id}/face
-    Streams representative face capture image with strict ownership authorization.
+    Retrieves full details of a scan report with strict ownership verification.
+    """
+    try:
+        report = await scan_report_service.get_report_by_id(
+            db=db,
+            user=current_user,
+            report_id=report_id,
+        )
+        return _format_report_response(report)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Scan report not found")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this report")
+
+
+@router.get("/{report_id}/face")
+async def download_report_face_capture(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Streams the representative face image evidence captured during the scan.
     """
     try:
         file_bytes, mime_type, filename = await scan_report_service.get_report_file(
             db=db,
             user=current_user,
-            report_id=id,
+            report_id=report_id,
             file_type="face",
         )
         return Response(
@@ -220,21 +241,20 @@ async def download_report_face_capture(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.get("/{id}/jpg")
+@router.get("/{report_id}/jpg")
 async def download_report_jpg(
-    id: str,
+    report_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    GET /api/v1/reports/{id}/jpg
-    Downloads single-page high-definition JPG report card.
+    Downloads high-resolution single-page JPG report card.
     """
     try:
         file_bytes, mime_type, filename = await scan_report_service.get_report_file(
             db=db,
             user=current_user,
-            report_id=id,
+            report_id=report_id,
             file_type="jpg",
         )
         return Response(
@@ -248,21 +268,20 @@ async def download_report_jpg(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.get("/{id}/pdf")
+@router.get("/{report_id}/pdf")
 async def download_report_pdf(
-    id: str,
+    report_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    GET /api/v1/reports/{id}/pdf
-    Downloads official multi-page A4 PDF evidence report dossier.
+    Downloads official multi-page A4 PDF evidence dossier.
     """
     try:
         file_bytes, mime_type, filename = await scan_report_service.get_report_file(
             db=db,
             user=current_user,
-            report_id=id,
+            report_id=report_id,
             file_type="pdf",
         )
         return Response(
@@ -276,117 +295,27 @@ async def download_report_pdf(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.delete("/{id}", status_code=status.HTTP_200_OK)
-async def delete_report(
-    id: str,
+@router.delete("/{report_id}", status_code=status.HTTP_200_OK)
+async def delete_scan_report(
+    report_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    DELETE /api/v1/reports/{id}
     Deletes report and purges face captures and documents from storage.
     """
     try:
         await scan_report_service.delete_report(
             db=db,
             user=current_user,
-            report_id=id,
+            report_id=report_id,
         )
         return {
             "status": "DELETED",
-            "report_id": id,
+            "report_id": report_id,
             "message": "Report and associated face captures deleted successfully.",
         }
     except ValueError:
         raise HTTPException(status_code=404, detail="Report not found")
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
-
-
-# ── UNIFIED GET BY ID ────────────────────────────────────────────────────────
-
-@router.get("/{id}")
-async def get_report_by_id_unified(
-    id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    GET /api/v1/reports/{id}
-    Returns structured report data. Checks ScanReport first, then falls back to MediaAnalysis Report.
-    """
-    # 1. Check ScanReport
-    try:
-        scan_rep = await scan_report_service.get_report_by_id(db, current_user, id)
-        return _format_scan_report_response(scan_rep)
-    except (ValueError, PermissionError):
-        pass
-
-    # 2. Check MediaAnalysis Report
-    result = await db.execute(
-        select(Report).where(
-            Report.analysis_id == id,
-            Report.user_id == current_user.id,
-        )
-    )
-    legacy_rep = result.scalar_one_or_none()
-    if legacy_rep:
-        return legacy_rep
-
-    raise HTTPException(status_code=404, detail="Report not found")
-
-
-# ── LEGACY MEDIA ANALYSIS REPORT ENDPOINTS ───────────────────────────────────
-
-@router.post("/{analysis_id}/generate", response_model=ReportResponse, status_code=201)
-async def generate_legacy_media_report(
-    analysis_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Generate an AI-powered evidence report for a completed media analysis (image/video/audio)."""
-    result = await db.execute(
-        select(MediaAnalysis).where(
-            MediaAnalysis.id == analysis_id,
-            MediaAnalysis.user_id == current_user.id,
-            MediaAnalysis.deleted_at.is_(None),
-        )
-    )
-    analysis = result.scalar_one_or_none()
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Analysis not found")
-    if analysis.status != AnalysisStatus.COMPLETE:
-        raise HTTPException(status_code=400, detail="Analysis not yet complete")
-
-    existing = await db.execute(select(Report).where(Report.analysis_id == analysis_id))
-    report = existing.scalar_one_or_none()
-    if report:
-        return report
-
-    report = await report_service.generate(db, analysis, current_user)
-    return report
-
-
-@router.get("/{analysis_id}/download/json")
-async def download_legacy_report_json(
-    analysis_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Download legacy report as JSON."""
-    result = await db.execute(
-        select(Report).where(
-            Report.analysis_id == analysis_id,
-            Report.user_id == current_user.id,
-        )
-    )
-    report = result.scalar_one_or_none()
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-
-    content = json.dumps(report.report_json or {}, indent=2)
-    return Response(
-        content=content,
-        media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="privacy-eye-report-{analysis_id[:8]}.json"'},
-    )

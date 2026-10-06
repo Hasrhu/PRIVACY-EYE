@@ -35,11 +35,16 @@ import {
   AlertOctagon,
   PauseCircle,
   PlayCircle,
+  FileText,
+  Download,
+  ExternalLink,
+  Image as ImageIcon,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
-import { liveScanApi, getErrorMessage } from '@/lib/api'
+import { liveScanApi, scanReportsApi, getErrorMessage } from '@/lib/api'
+import type { ScanReport } from '@/types'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { GlassButton } from '@/components/ui/GlassButton'
 import { GlassBadge } from '@/components/ui/GlassBadge'
@@ -319,6 +324,79 @@ export default function LiveCameraScanPage() {
   const [consentStatus, setConsentStatus] = useState<'GRANTED' | 'DECLINED' | null>(null)
   const [trainingStats, setTrainingStats] = useState<TrainingStats | null>(null)
   const [savedReportId, setSavedReportId] = useState<string | null>(null)
+
+  // Scan Report States & Handlers
+  const [showReportSaveModal, setShowReportSaveModal] = useState(false)
+  const [isSavingScanReport, setIsSavingScanReport] = useState(false)
+  const [savedScanReport, setSavedScanReport] = useState<ScanReport | null>(null)
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
+  const [isDownloadingJpg, setIsDownloadingJpg] = useState(false)
+
+  const openReportSaveModal = () => {
+    const snap = grabCurrentFrameB64()
+    setCurrentSnapshotB64(snap)
+    setShowReportSaveModal(true)
+  }
+
+  const handleSaveScanReport = async (saveFaceCapture: boolean) => {
+    if (!analysisResult) return
+    setIsSavingScanReport(true)
+    try {
+      const res = await scanReportsApi.create({
+        live_session_id: sessionId,
+        save_face_capture: saveFaceCapture,
+        representative_frame_base64: saveFaceCapture ? (currentSnapshotB64 || undefined) : undefined,
+        inference_result: analysisResult,
+      })
+      setSavedScanReport(res.data)
+      setShowReportSaveModal(false)
+      toast.success(`Scan report saved! ID: ${res.data.report_number}`)
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setIsSavingScanReport(false)
+    }
+  }
+
+  const handleDownloadPdf = async (reportId: string, reportNum: string) => {
+    setIsDownloadingPdf(true)
+    try {
+      const res = await scanReportsApi.downloadPdf(reportId)
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `${reportNum}_forensic_dossier.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      toast.success('PDF report downloaded!')
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setIsDownloadingPdf(false)
+    }
+  }
+
+  const handleDownloadJpg = async (reportId: string, reportNum: string) => {
+    setIsDownloadingJpg(true)
+    try {
+      const res = await scanReportsApi.downloadJpg(reportId)
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'image/jpeg' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `${reportNum}_audit_card.jpg`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      toast.success('JPG report downloaded!')
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setIsDownloadingJpg(false)
+    }
+  }
 
   // Load training stats
   const loadTrainingStats = async () => {
@@ -1020,16 +1098,84 @@ export default function LiveCameraScanPage() {
               <span>Active Head Pose Challenge Nonce</span>
             </label>
 
-            <GlassButton
-              variant="primary"
-              size="sm"
-              onClick={openConsentModal}
-              disabled={!analysisResult || !analysisResult.face_detected}
-              icon={<Save className="w-3.5 h-3.5" />}
-            >
-              Save Audit & Model Consent
-            </GlassButton>
+            <div className="flex items-center gap-2">
+              <GlassButton
+                variant="primary"
+                size="sm"
+                onClick={openReportSaveModal}
+                disabled={!analysisResult || !analysisResult.face_detected}
+                icon={<FileText className="w-3.5 h-3.5" />}
+                className="shadow-glow-blue"
+              >
+                Save Scan Report
+              </GlassButton>
+
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                onClick={openConsentModal}
+                disabled={!analysisResult || !analysisResult.face_detected}
+                icon={<Save className="w-3.5 h-3.5" />}
+              >
+                Training Consent
+              </GlassButton>
+            </div>
           </GlassCard>
+
+          {/* Scan Report Saved Live Banner */}
+          {savedScanReport && (
+            <GlassCard
+              variant="elevated"
+              className="p-5 rounded-3xl border-2 border-brand-cyan/40 bg-brand-cyan/10 backdrop-blur-xl space-y-3"
+            >
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-brand-cyan/20 border border-brand-cyan/40 flex items-center justify-center text-brand-cyan flex-shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                        REPORT PERSISTED
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-brand-cyan/20 text-[10px] font-mono font-bold text-brand-cyan">
+                        {savedScanReport.report_number}
+                      </span>
+                    </div>
+                    <p className="text-xs text-white/70 mt-0.5">
+                      Result: <strong className="text-white">{savedScanReport.assessment.replace(/_/g, ' ')}</strong> ({savedScanReport.confidence.toFixed(1)}%)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link href={`/dashboard/reports/${savedScanReport.id}`}>
+                    <GlassButton variant="primary" size="sm" icon={<ExternalLink className="w-3.5 h-3.5" />}>
+                      View Report
+                    </GlassButton>
+                  </Link>
+                  <GlassButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDownloadPdf(savedScanReport.id, savedScanReport.report_number)}
+                    isLoading={isDownloadingPdf}
+                    icon={<Download className="w-3.5 h-3.5" />}
+                  >
+                    PDF
+                  </GlassButton>
+                  <GlassButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDownloadJpg(savedScanReport.id, savedScanReport.report_number)}
+                    isLoading={isDownloadingJpg}
+                    icon={<ImageIcon className="w-3.5 h-3.5" />}
+                  >
+                    JPG
+                  </GlassButton>
+                </div>
+              </div>
+            </GlassCard>
+          )}
 
           {/* Consent Status Banner */}
           {consentStatus && (
@@ -1368,6 +1514,31 @@ export default function LiveCameraScanPage() {
               </span>
             </div>
 
+            {/* Real-Time Eye & Blink State HUD (Section 16 Specification) */}
+            <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/8 space-y-0.5">
+                <span className="text-[9px] uppercase text-white/40 block">Left Eye</span>
+                <span className={`text-xs font-bold block ${analysisResult?.eyes?.left_eye_state === 'CLOSED' ? 'text-status-warning' : 'text-status-safe'}`}>
+                  {analysisResult?.eyes?.left_eye_state || analysisResult?.eyes?.left?.state || 'OPEN'}
+                </span>
+                <span className="text-[9px] text-white/40 block">EAR: {analysisResult?.eyes?.left_EAR !== undefined ? analysisResult.eyes.left_EAR.toFixed(2) : (analysisResult?.eyes?.left?.ear !== undefined ? analysisResult.eyes.left.ear.toFixed(2) : '—')}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/8 space-y-0.5">
+                <span className="text-[9px] uppercase text-white/40 block">Right Eye</span>
+                <span className={`text-xs font-bold block ${analysisResult?.eyes?.right_eye_state === 'CLOSED' ? 'text-status-warning' : 'text-status-safe'}`}>
+                  {analysisResult?.eyes?.right_eye_state || analysisResult?.eyes?.right?.state || 'OPEN'}
+                </span>
+                <span className="text-[9px] text-white/40 block">EAR: {analysisResult?.eyes?.right_EAR !== undefined ? analysisResult.eyes.right_EAR.toFixed(2) : (analysisResult?.eyes?.right?.ear !== undefined ? analysisResult.eyes.right.ear.toFixed(2) : '—')}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/8 space-y-0.5">
+                <span className="text-[9px] uppercase text-white/40 block">Blink State</span>
+                <span className={`text-xs font-bold block ${analysisResult?.blink?.detected ? 'text-status-safe font-black animate-pulse' : (analysisResult?.blink?.state === 'CLOSED' ? 'text-status-warning' : 'text-brand-cyan')}`}>
+                  {analysisResult?.blink?.detected ? 'BLINK DETECTED ✓' : (analysisResult?.blink?.state || 'OPEN')}
+                </span>
+                <span className="text-[9px] text-white/40 block">Count: {analysisResult?.blink_count ?? 0}</span>
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="p-3 rounded-2xl bg-white/4 border border-white/6 space-y-1">
                 <span className="text-[10px] font-mono uppercase text-white/40 block">Verified Blinks</span>
@@ -1704,6 +1875,122 @@ export default function LiveCameraScanPage() {
                   0{analysisResult.blink_challenge.countdown_remaining_sec ?? 5}
                 </div>
                 <span className="text-[11px] font-mono text-white/50">seconds remaining</span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* ── SAVE SCAN REPORT EXPLICIT CONSENT & PRIVACY MODAL ── */}
+      <AnimatePresence>
+        {showReportSaveModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-canvas/80 backdrop-blur-2xl">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              className="w-full max-w-lg rounded-3xl glass-floating border-2 border-brand-blue/50 p-6 md:p-8 space-y-6 shadow-2xl relative"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-blue/20 border border-brand-blue/40 flex items-center justify-center text-brand-blue flex-shrink-0">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg md:text-xl font-black text-white tracking-tight">
+                      Save Scan Report?
+                    </h3>
+                    <p className="text-xs text-brand-blue font-mono uppercase tracking-wider">
+                      Biometric Audit & Forensic Dossier
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowReportSaveModal(false)}
+                  className="p-1.5 rounded-xl hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Snapshot Frame & Analysis Summary Preview */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center p-4 rounded-2xl bg-white/4 border border-white/8">
+                {currentSnapshotB64 && (
+                  <div className="sm:col-span-5 flex flex-col items-center">
+                    <div className="w-28 h-28 rounded-2xl overflow-hidden border border-brand-cyan/40 shadow-glow-blue relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={currentSnapshotB64}
+                        alt="Evidence Frame"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="text-[10px] font-mono text-white/40 mt-1">Representative Frame</span>
+                  </div>
+                )}
+                <div className={`${currentSnapshotB64 ? 'sm:col-span-7' : 'sm:col-span-12'} space-y-1.5 text-xs font-mono`}>
+                  <div className="flex justify-between">
+                    <span className="text-white/40">Assessment:</span>
+                    <span className="text-white font-bold">{analysisResult?.assessment}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/40">Confidence:</span>
+                    <span className="text-brand-cyan font-bold">{conf.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/40">Reliability:</span>
+                    <span className="text-white font-bold">{analysisResult?.reliability || 'HIGH'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/40">Observation:</span>
+                    <span className="text-white">{analysisResult?.blink_count ?? 0} Blinks Verified</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Transparent Disclosure */}
+              <div className="space-y-2 text-xs text-white/70 leading-relaxed bg-white/3 p-4 rounded-2xl border border-white/6">
+                <p className="font-semibold text-white">
+                  Privacy & Data Storage Notice:
+                </p>
+                <p>
+                  This report will include the captured face frame and analysis results. Your report will be stored securely in the database so you can review or download it later as JPG and PDF.
+                </p>
+                <p className="text-[11px] text-white/50">
+                  You can choose whether or not to store the captured face frame. Choosing &quot;No Face Image&quot; enforces our Zero-Biometric Storage policy.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-2.5 pt-1">
+                <GlassButton
+                  variant="primary"
+                  size="md"
+                  onClick={() => handleSaveScanReport(true)}
+                  isLoading={isSavingScanReport}
+                  className="w-full shadow-glow-blue justify-center"
+                  icon={<ShieldCheck className="w-4 h-4" />}
+                >
+                  Save Report (Include Face Evidence)
+                </GlassButton>
+
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  onClick={() => handleSaveScanReport(false)}
+                  isLoading={isSavingScanReport}
+                  className="w-full justify-center"
+                  icon={<UserX className="w-4 h-4" />}
+                >
+                  Save Report (Don&apos;t Save Face Image)
+                </GlassButton>
+
+                <button
+                  type="button"
+                  onClick={() => setShowReportSaveModal(false)}
+                  className="w-full py-2 text-center text-xs font-mono text-white/40 hover:text-white transition-colors"
+                >
+                  Cancel / Don&apos;t Save
+                </button>
               </div>
             </motion.div>
           </div>

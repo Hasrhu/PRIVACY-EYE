@@ -95,6 +95,8 @@ next-env.d.ts
 *.joblib
 *.npy
 *.npz
+!backend/app/ml/weights/blink_temporal_model.npz
+!ml/models/blink_temporal_model.npz
 
 # Model cache & checkpoint directories
 models_cache/
@@ -126,6 +128,8 @@ temp/
 uploads/
 backend/tmp/
 backend/uploads/
+backend/storage/*
+!backend/storage/.gitkeep
 *.tmp
 *.log
 

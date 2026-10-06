@@ -1092,6 +1092,22 @@ class LiveAuthenticityEngine:
                 "face_detected": False,
                 "user_message": "No face detected in camera viewport.",
                 "signals": [],
+                "eyes": {
+                    "left": {"visible": False, "confidence": 0.0, "ear": 0.0, "state": "UNKNOWN"},
+                    "right": {"visible": False, "confidence": 0.0, "ear": 0.0, "state": "UNKNOWN"},
+                    "quality": 0.0,
+                    "visibility_state": "NONE_VISIBLE",
+                },
+                "blink": {
+                    "detected": False,
+                    "confidence": 0.0,
+                    "count": 0,
+                    "duration_ms": 0.0,
+                    "timestamp_ms": int(time.time() * 1000),
+                    "state": "EYE_OPEN",
+                    "last_blink_timestamp": None,
+                    "event": None,
+                },
                 "processing_ms": int((time.monotonic() - t0) * 1000),
             }
 
@@ -1524,6 +1540,55 @@ class LiveAuthenticityEngine:
             "right_eye_visible": eye_res["right_eye_visible"],
             "left_eye_quality": eye_res["left_eye_quality"],
             "right_eye_quality": eye_res["right_eye_quality"],
+            # Part 18 Structured Eyes Subsystem Output
+            "eyes": {
+                "left": {
+                    "visible": eye_res.get("left_eye_visible", False),
+                    "confidence": eye_res.get("left_eye_quality", 0.0),
+                    "ear": eye_res.get("left_ear", 0.0),
+                    "state": blink_res.get("left_eye_state", "OPEN"),
+                    "open": blink_res.get("left_eye_open", True),
+                    "bbox": eye_res.get("left_eye_bbox"),
+                    "center": eye_res.get("left_eye_center"),
+                    "landmarks": eye_res.get("left_eye_landmarks"),
+                },
+                "right": {
+                    "visible": eye_res.get("right_eye_visible", False),
+                    "confidence": eye_res.get("right_eye_quality", 0.0),
+                    "ear": eye_res.get("right_ear", 0.0),
+                    "state": blink_res.get("right_eye_state", "OPEN"),
+                    "open": blink_res.get("right_eye_open", True),
+                    "bbox": eye_res.get("right_eye_bbox"),
+                    "center": eye_res.get("right_eye_center"),
+                    "landmarks": eye_res.get("right_eye_landmarks"),
+                },
+                "left_eye_open": blink_res.get("left_eye_open", True),
+                "right_eye_open": blink_res.get("right_eye_open", True),
+                "left_EAR": blink_res.get("left_EAR", eye_res.get("left_ear", 0.0)),
+                "right_EAR": blink_res.get("right_EAR", eye_res.get("right_ear", 0.0)),
+                "left_eye_state": blink_res.get("left_eye_state", "OPEN"),
+                "right_eye_state": blink_res.get("right_eye_state", "OPEN"),
+                "quality": eye_res.get("overall_eye_quality", 0.0),
+                "visibility_state": eye_res.get("eye_visibility", "BOTH_VISIBLE"),
+            },
+            # Part 18 Structured Blink Subsystem Output
+            "blink": {
+                "blink_detected": blink_res.get("just_blinked", False),
+                "detected": blink_res.get("just_blinked", False),
+                "blink_count": blink_res.get("blink_count", 0),
+                "count": blink_res.get("blink_count", 0),
+                "blink_confidence": (blink_res.get("last_blink_event") or {}).get("blink_confidence", 0.92) if blink_res.get("just_blinked") else 0.0,
+                "confidence": (blink_res.get("last_blink_event") or {}).get("blink_confidence", 0.92) if blink_res.get("just_blinked") else 0.0,
+                "eye_visibility": round(float(eye_res.get("eye_visibility_score", 1.0)), 2),
+                "left_eye_state": blink_res.get("left_eye_state", "OPEN"),
+                "right_eye_state": blink_res.get("right_eye_state", "OPEN"),
+                "duration_ms": (blink_res.get("last_blink_event") or {}).get("duration_ms", 0.0) if blink_res.get("just_blinked") else 0.0,
+                "timestamp_ms": (blink_res.get("last_blink_event") or {}).get("timestamp_ms", int(time.time() * 1000)),
+                "state": blink_res.get("state", "OPEN"),
+                "state_sequence": blink_res.get("state_sequence", ["OPEN"]),
+                "last_blink_timestamp": blink_res.get("last_blink_timestamp"),
+                "event": blink_res.get("blink_event"),
+            },
             "blink_status": (
                 "CHALLENGE_ACTIVE"
                 if blink_res["challenge"]["active"]

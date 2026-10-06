@@ -25,6 +25,11 @@ api.interceptors.response.use(
   async (err: AxiosError) => {
     if (err.response?.status === 401 && !err.config?.url?.includes('/auth/login') && !err.config?.url?.includes('/auth/refresh')) {
       const refresh = Cookies.get('refresh_token')
+      if (!refresh) {
+        Cookies.remove('access_token')
+        Cookies.remove('refresh_token')
+        return Promise.reject(err)
+      }
       try {
         const res = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refresh }, { withCredentials: true })
         const { access_token, refresh_token: new_refresh } = res.data
@@ -39,9 +44,6 @@ api.interceptors.response.use(
       } catch {
         Cookies.remove('access_token')
         Cookies.remove('refresh_token')
-        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth/')) {
-          window.location.href = `/auth/login?next=${encodeURIComponent(window.location.pathname)}`
-        }
       }
     }
     return Promise.reject(err)
@@ -157,6 +159,35 @@ export const reportsApi = {
   get:      (analysisId: string) => api.get(`/reports/${analysisId}`),
   downloadJson: (analysisId: string) =>
     api.get(`/reports/${analysisId}/download/json`, { responseType: 'blob' }),
+}
+
+// ── Scan Reports (Live Camera Forensics & Evidence Dossiers) ─────────────────
+export const scanReportsApi = {
+  create: (payload: {
+    live_session_id: string
+    save_face_capture: boolean
+    representative_frame_base64?: string
+    inference_result?: any
+  }) => api.post('/reports', payload),
+
+  list: (params?: { page?: number; per_page?: number; assessment?: string; search?: string }) =>
+    api.get('/reports', { params }),
+
+  get: (id: string) => api.get(`/reports/${id}`),
+
+  downloadFace: (id: string) =>
+    api.get(`/reports/${id}/face`, { responseType: 'blob' }),
+
+  downloadJpg: (id: string) =>
+    api.get(`/reports/${id}/jpg`, { responseType: 'blob' }),
+
+  downloadPdf: (id: string) =>
+    api.get(`/reports/${id}/pdf`, { responseType: 'blob' }),
+
+  delete: (id: string) => api.delete(`/reports/${id}`),
+
+  adminList: (params?: { page?: number; per_page?: number; search?: string }) =>
+    api.get('/reports/admin/all', { params }),
 }
 
 // ── Live Camera Scan ─────────────────────────────────────────────────────────

@@ -20,6 +20,10 @@ EYE_TOO_SMALL = "EYE_TOO_SMALL"
 EYES_OBSCURED = "EYES_OBSCURED"
 
 
+from app.ml.eye_tracking.eye_localizer import EyeLocalizer
+from app.ml.configs.eye_blink_config import EyeVisibilityState
+
+
 class EyeAnalyzer:
     """
     Dedicated Eye Analysis Engine for live biometric authenticity.
@@ -29,6 +33,7 @@ class EyeAnalyzer:
     def __init__(self, min_blur_var: float = 24.0, min_eye_size_px: int = 10):
         self.min_blur_var = min_blur_var
         self.min_eye_size_px = min_eye_size_px
+        self._localizer = EyeLocalizer()
 
     def extract_eye_orbit(
         self,
@@ -244,6 +249,14 @@ class EyeAnalyzer:
         overall_quality = round((q_left["quality"] + q_right["quality"]) / 2.0, 2)
         mean_openness = round((q_left["openness"] + q_right["openness"]) / 2.0, 2)
 
+        # Execute precision 6-point orbital modeling & EAR extraction
+        loc_res = self._localizer.localize_eyes(
+            img_bgr,
+            landmarks=landmarks,
+            face_box=face_box,
+            head_yaw=head_yaw,
+        )
+
         return {
             "eye_status": eye_status,
             "left_eye_visible": bool(left_vis),
@@ -259,4 +272,23 @@ class EyeAnalyzer:
             "right_eye_box": right_box,
             "reason_codes": reason_codes,
             "user_guidance": user_guidance,
+            # Precision Eye Localization Subsystem Keys
+            "left_eye_landmarks": loc_res["left_eye"]["landmarks"],
+            "right_eye_landmarks": loc_res["right_eye"]["landmarks"],
+            "left_eye_bbox": loc_res["left_eye"]["bbox"],
+            "right_eye_bbox": loc_res["right_eye"]["bbox"],
+            "left_eye_center": loc_res["left_eye"]["center"],
+            "right_eye_center": loc_res["right_eye"]["center"],
+            "left_eye_width": loc_res["left_eye"]["width"],
+            "left_eye_height": loc_res["left_eye"]["height"],
+            "right_eye_width": loc_res["right_eye"]["width"],
+            "right_eye_height": loc_res["right_eye"]["height"],
+            "eye_visibility": loc_res["eye_visibility_state"].value,
+            "eye_quality": loc_res["overall_eye_quality"],
+            "landmark_confidence": loc_res["landmark_confidence"],
+            "left_ear": loc_res["left_eye"]["ear"],
+            "right_ear": loc_res["right_eye"]["ear"],
+            "mean_ear": loc_res["mean_ear"],
+            "left_eye": loc_res["left_eye"],
+            "right_eye": loc_res["right_eye"],
         }

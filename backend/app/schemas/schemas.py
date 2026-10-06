@@ -292,3 +292,74 @@ class DatasetSummaryStats(BaseModel):
     category_counts: Dict[str, int]
     split_counts: Dict[str, int]
     consent_compliance_pct: float
+
+
+# ── Scan Reports Schemas ─────────────────────────────────────────────────────
+
+class ScanReportSignalResponse(BaseModel):
+    id: str
+    signal_name: str
+    signal_value: str
+    signal_status: str
+    signal_explanation: Optional[str] = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class ScanReportTestResponse(BaseModel):
+    id: str
+    test_name: str
+    status: str
+    score: Optional[float] = None
+    message: Optional[str] = None
+    timestamp: datetime
+    model_config = {"from_attributes": True}
+
+
+class ScanReportCreateRequest(BaseModel):
+    live_session_id: str
+    save_face_capture: bool = True
+    representative_frame_base64: Optional[str] = None
+    # Inference snapshot from the live session
+    inference_result: Optional[Dict[str, Any]] = None
+
+
+class ScanReportResponse(BaseModel):
+    id: str
+    report_number: str
+    user_id: str
+    live_session_id: str
+    assessment: str
+    category_label: Optional[str] = None
+    confidence: float
+    reliability: str
+    input_quality: str
+    processing_location: str
+    has_face_capture: bool
+    face_capture_available: bool
+    jpg_available: bool
+    pdf_available: bool
+    report_status: str
+    model_name: str
+    model_version: str
+    preprocessing_version: str
+    fusion_version: str
+    calibration_version: str
+    target_face_id: Optional[str] = None
+    faces_detected_count: int
+    explanation: Optional[str] = None
+    why_reasons: Optional[List[str]] = None
+    signals: List[ScanReportSignalResponse] = []
+    tests: List[ScanReportTestResponse] = []
+    raw_snapshot: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class ScanReportListResponse(BaseModel):
+    items: List[ScanReportResponse]
+    total: int
+    page: int
+    per_page: int
+    pages: int

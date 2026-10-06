@@ -87,3 +87,61 @@ export const MEDIA_TYPE_CONFIG: Record<MediaType, { label: string; accept: Recor
   VIDEO: { label: 'Video', accept: { 'video/mp4': ['.mp4'], 'video/quicktime': ['.mov'], 'video/webm': ['.webm'] },       maxMB: 500 },
   AUDIO: { label: 'Audio', accept: { 'audio/mpeg': ['.mp3'], 'audio/wav': ['.wav'], 'audio/ogg': ['.ogg'], 'audio/flac': ['.flac'] }, maxMB: 50 },
 }
+
+export interface ScanReportSignal {
+  id: string
+  signal_name: string
+  signal_value: string
+  signal_status: string
+  signal_explanation?: string | null
+  created_at: string
+}
+
+export interface ScanReportTest {
+  id: string
+  test_name: string
+  status: string
+  score?: number | null
+  message?: string | null
+  timestamp: string
+}
+
+export interface ScanReport {
+  id: string
+  report_number: string
+  user_id: string
+  live_session_id: string
+  assessment: string
+  category_label?: string | null
+  confidence: number
+  reliability: string
+  input_quality: string
+  processing_location: string
+  has_face_capture: boolean
+  face_capture_available: boolean
+  jpg_available: boolean
+  pdf_available: boolean
+  report_status: string
+  model_name: string
+  model_version: string
+  preprocessing_version: string
+  fusion_version: string
+  calibration_version: string
+  target_face_id?: string | null
+  faces_detected_count: number
+  explanation?: string | null
+  why_reasons?: string[] | null
+  signals: ScanReportSignal[]
+  tests: ScanReportTest[]
+  raw_snapshot?: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ScanReportListResponse {
+  items: ScanReport[]
+  total: number
+  page: number
+  per_page: number
+  pages: number
+}
