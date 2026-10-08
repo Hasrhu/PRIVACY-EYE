@@ -132,6 +132,8 @@ backend/storage/*
 !backend/storage/.gitkeep
 *.tmp
 *.log
+frontend/lt.txt
+frontend/pinggy.txt
 
 # ── Databases ───────────────────────────────────────────────────────────────
 *.db
