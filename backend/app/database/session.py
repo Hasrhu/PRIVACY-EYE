@@ -3,11 +3,17 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
+from pathlib import Path
+
 db_url = settings.DATABASE_URL
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
 elif db_url.startswith("postgresql://") and "+asyncpg" not in db_url:
     db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif "sqlite" in db_url:
+    backend_db = Path(__file__).resolve().parent.parent.parent / "privacyeye.db"
+    if "./privacyeye.db" in db_url or db_url.endswith("/privacyeye.db"):
+        db_url = f"sqlite+aiosqlite:///{backend_db.as_posix()}"
 
 engine_kwargs = {"echo": settings.APP_DEBUG}
 if "sqlite" not in db_url:

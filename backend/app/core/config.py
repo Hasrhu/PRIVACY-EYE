@@ -2,8 +2,9 @@
 Privacy Eye — Application Configuration
 Uses pydantic-settings for typed, validated environment variable loading.
 """
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Union, Any
 import os
 
 
@@ -38,7 +39,23 @@ class Settings(BaseSettings):
     TEMP_RETENTION_MINUTES: int = 30
 
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
+    CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:3001"]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            clean = v.strip()
+            if clean.startswith("[") and clean.endswith("]"):
+                import json
+                try:
+                    return json.loads(clean)
+                except Exception:
+                    pass
+            return [i.strip() for i in clean.split(",") if i.strip()]
+        elif isinstance(v, (list, tuple)):
+            return list(v)
+        return ["http://localhost:3000", "http://localhost:3001"]
 
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 30
