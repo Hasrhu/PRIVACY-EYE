@@ -37,6 +37,7 @@ from app.ml.eye_analyzer import (
     EYE_PARTIALLY_OCCLUDED,
 )
 from app.ml.blink_engine import BlinkEngine
+from app.ml.blink_detection.blink_detector import MediaPipeBlinkDetector
 from app.ml.screen_detector import ScreenDetector
 
 logger = structlog.get_logger(__name__)
@@ -60,6 +61,7 @@ class LiveAuthenticityEngine:
         # Dedicated Eye, Blink, and Screen Detectors
         self._eye_analyzer = EyeAnalyzer()
         self._blink_engine = BlinkEngine()
+        self._mp_blink_detector = MediaPipeBlinkDetector()
         self._screen_detector = ScreenDetector()
         self._session_smoothed_confidence: Dict[str, float] = {}
         self._session_start_time: Dict[str, float] = {}
@@ -1304,6 +1306,22 @@ class LiveAuthenticityEngine:
             face_box=face_box,
             head_yaw=float(pose["yaw"]),
         )
+        
+        # Overlay MediaPipe Face Mesh EAR and quality results
+        mp_eye_res = self._mp_blink_detector.analyze_eyes(session_id, img_bgr)
+        if mp_eye_res["face_detected"]:
+            # Override with highly precise MediaPipe data
+            eye_res["openness"] = mp_eye_res["openness"]
+            eye_res["mean_ear"] = mp_eye_res["mean_ear"]
+            eye_res["left_ear"] = mp_eye_res["left_ear"]
+            eye_res["right_ear"] = mp_eye_res["right_ear"]
+            eye_res["eye_status"] = mp_eye_res["eye_status"]
+            eye_res["overall_eye_quality"] = mp_eye_res["overall_eye_quality"]
+            eye_res["is_blurry"] = mp_eye_res["is_blurry"]
+            eye_res["is_obscured"] = mp_eye_res["is_obscured"]
+            eye_res["left_eye_visible"] = mp_eye_res["left_eye_visible"]
+            eye_res["right_eye_visible"] = mp_eye_res["right_eye_visible"]
+
         openness = eye_res["openness"]
 
         # 10d. Biological Blink State Machine & 25s Challenge Timer (STEPS 3, 4, 5)
