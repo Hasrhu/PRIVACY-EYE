@@ -920,13 +920,366 @@ export default function LiveCameraScanPage() {
               </div>
             )}
 
+            {/* Floating Glass Pill at Bottom */}
+            {isCameraActive && (
+              <div className="absolute bottom-5 inset-x-0 z-20 flex justify-center px-4 pointer-events-none">
+                <div className="relative overflow-hidden flex items-center justify-between w-full max-w-sm h-12 px-5 rounded-2xl glass-floating border border-white/20 shadow-glass-floating backdrop-blur-2xl">
+                  {/* Calibrated progress background fill */}
+                  <div
+                    className="absolute inset-y-0 left-0 bg-status-safe/20 transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.max(12, conf))}%` }}
+                  />
+                  <div className="relative z-10 flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-2 h-2 rounded-full bg-status-safe animate-ping" />
+                      <span className="text-xs font-bold tracking-wide text-white truncate">
+                        {analysisResult?.face_detected
+                          ? analysisResult.category_label
+                          : isAnalyzing
+                          ? 'Analyzing...'
+                          : 'Waiting for Face'}
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono font-extrabold text-white ml-2 flex-shrink-0">
+                      {analysisResult?.face_detected ? `${conf.toFixed(0)}%` : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── METRICS BELOW CAMERA ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <GlassCard variant="elevated" className="p-3.5 space-y-1">
+              <span className="text-[10px] font-mono uppercase text-white/50 block">Liveness</span>
+              <p className="text-xl font-bold font-mono text-status-safe">
+                {analysisResult ? `${livenessPct}%` : '—'}
+              </p>
+              <span className="text-[10px] text-white/40 block">Micro-motion</span>
+            </GlassCard>
+
+            <GlassCard variant="elevated" className="p-3.5 space-y-1">
+              <span className="text-[10px] font-mono uppercase text-white/50 block">Synthetic Risk</span>
+              <p className="text-xl font-bold font-mono text-status-warning">
+                {analysisResult ? `${syntheticPct}%` : '—'}
+              </p>
+              <span className="text-[10px] text-white/40 block">Spatial Residuals</span>
+            </GlassCard>
+
+            <GlassCard variant="elevated" className="p-3.5 space-y-1">
+              <span className="text-[10px] font-mono uppercase text-white/50 block">Replay Risk</span>
+              <p
+                className={`text-xl font-bold font-mono ${
+                  analysisResult?.presentation_attack ? 'text-status-danger' : 'text-brand-blue'
+                }`}
+              >
+                {analysisResult ? `${replayPct}%` : '—'}
+              </p>
+              <span className="text-[10px] text-white/40 block">
+                {analysisResult?.presentation_attack ? 'Screen Attack' : 'Fourier PAD'}
+              </span>
+            </GlassCard>
+
+            <GlassCard variant="elevated" className="p-3.5 space-y-1">
+              <span className="text-[10px] font-mono uppercase text-white/50 block">Eye Quality</span>
+              <p className="text-xl font-bold font-mono text-white">
+                {analysisResult?.overall_eye_quality !== undefined
+                  ? `${analysisResult.overall_eye_quality}%`
+                  : analysisResult?.quality?.sharpness_label || 'GOOD'}
+              </p>
+              <span className="text-[10px] text-white/40 block">
+                {analysisResult?.eye_status === 'BOTH_EYES_VISIBLE'
+                  ? 'Both Visible'
+                  : analysisResult?.eye_status === 'EYE_TOO_BLURRY'
+                  ? 'Blurry'
+                  : 'Ocular Quality'}
+              </span>
+            </GlassCard>
+          </div>
+
+          {/* Action bar below camera */}
+          <GlassCard variant="base" className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <label className="flex items-center gap-2.5 text-xs text-white/80 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={challengeMode}
+                onChange={(e) => setChallengeMode(e.target.checked)}
+                className="w-4 h-4 rounded bg-white/10 border-white/20 text-brand-blue focus:ring-0"
+              />
+              <span>Active Head Pose Challenge Nonce</span>
+            </label>
+
+            <GlassButton
+              variant="primary"
+              size="sm"
+              onClick={openConsentModal}
+              disabled={!analysisResult || !analysisResult.face_detected}
+              icon={<Save className="w-3.5 h-3.5" />}
+            >
+              Save Audit & Model Consent
+            </GlassButton>
+          </GlassCard>
+
+          {/* Consent Status Banner */}
+          {consentStatus && (
+            <GlassCard
+              variant="base"
+              className={`p-4 flex items-center justify-between gap-4 border ${
+                consentStatus === 'GRANTED' ? 'border-status-safe/40 bg-status-safe/10' : 'border-white/10'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                {consentStatus === 'GRANTED' ? (
+                  <UserCheck className="w-5 h-5 text-status-safe flex-shrink-0" />
+                ) : (
+                  <UserX className="w-5 h-5 text-white/50 flex-shrink-0" />
+                )}
+                <div>
+                  <p className="text-xs font-bold text-white">
+                    {consentStatus === 'GRANTED'
+                      ? 'Sample Added to Real Human Model Database'
+                      : 'Audit Logged · Strict Zero-Storage Retained'}
+                  </p>
+                  <p className="text-[11px] text-white/60">
+                    {consentStatus === 'GRANTED'
+                      ? 'Consent cryptographically sealed for supervised dataset fine-tuning.'
+                      : 'No raw biometric video was written to disk or database.'}
+                  </p>
+                </div>
+              </div>
+              {savedReportId && (
+                <Link href="/dashboard/reports">
+                  <GlassButton variant="secondary" size="sm">
+                    View Report
+                  </GlassButton>
+                </Link>
+              )}
+            </GlassCard>
+          )}
+        </div>
+
+        {/* ── RIGHT: ANALYSIS PANEL, CONFIDENCE METER & EXPLAINABILITY (5 Cols) ── */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Main Assessment Glass Card with Circular Gauge & Prominent Confidence Bar */}
+          <GlassCard variant="elevated" className="space-y-6">
+            <div className="flex items-center justify-between pb-3 border-b border-white/6">
+              <span className="text-xs font-mono uppercase tracking-wider text-white/50">
+                Inference Result
+              </span>
+              <GlassBadge
+                status={conf >= 80 ? 'safe' : conf >= 60 ? 'warning' : 'danger'}
+                label={analysisResult?.reliability ? `${analysisResult.reliability} RELIABILITY` : 'STANDBY'}
+              />
+            </div>
+
+            {/* Circular Gauge & Status */}
+            <div className="flex items-center gap-6">
+              <ConfidenceRing
+                value={conf}
+                size={110}
+                strokeWidth={9}
+                status={conf >= 80 ? 'safe' : conf >= 60 ? 'warning' : 'danger'}
+              />
+              <div className="space-y-1.5 flex-1">
+                <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white leading-snug">
+                  {analysisResult?.category_label || (isCameraActive ? 'SCANNING...' : 'STANDBY')}
+                </h2>
+                <p className="text-xs text-white/60 leading-relaxed">
+                  {analysisResult?.explanation || 'Awaiting live facial stream and continuous frame buffers.'}
+                </p>
+              </div>
+            </div>
+
+            {/* ── PROMINENT REAL-TIME CONFIDENCE BAR ── */}
+            <div className="space-y-2 pt-3 border-t border-white/8">
+              <div className="flex justify-between items-center text-xs font-mono">
+                <span className="text-white/60 uppercase tracking-wider text-[11px] font-semibold">
+                  Confidence Level
+                </span>
+                <span
+                  className={`font-mono font-bold text-base ${
+                    conf >= 80
+                      ? 'text-status-safe'
+                      : conf >= 60
+                      ? 'text-brand-cyan'
+                      : conf >= 40
+                      ? 'text-status-warning'
+                      : 'text-status-danger'
+                  }`}
+                >
+                  {analysisResult?.face_detected ? `${Math.round(conf)}%` : '0%'}
+                </span>
+              </div>
+              <div className="h-3 w-full bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/12 shadow-inner">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    conf >= 80
+                      ? 'bg-gradient-to-r from-brand-cyan via-brand-blue to-status-safe shadow-[0_0_14px_rgba(74,222,128,0.6)]'
+                      : conf >= 60
+                      ? 'bg-gradient-to-r from-brand-blue to-brand-cyan shadow-[0_0_14px_rgba(6,182,212,0.6)]'
+                      : conf >= 40
+                      ? 'bg-gradient-to-r from-amber-500 to-status-warning shadow-[0_0_14px_rgba(245,158,11,0.6)]'
+                      : 'bg-status-danger shadow-[0_0_14px_rgba(239,68,68,0.6)]'
+                  }`}
+                  style={{ width: `${analysisResult?.face_detected ? Math.min(100, Math.max(4, conf)) : 0}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Calibrated 5-Zone Scale Indicator Bar */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex justify-between text-[10px] font-mono text-white/50">
+                <span className={conf < 20 && analysisResult?.face_detected ? 'text-status-danger font-bold' : ''}>
+                  &lt;20% Scam
+                </span>
+                <span className={conf >= 50 && conf <= 60 ? 'text-status-warning font-bold' : ''}>
+                  50-60% Idle
+                </span>
+                <span className={conf > 60 && conf <= 75 ? 'text-brand-cyan font-bold' : ''}>
+                  &gt;60% (1 Task)
+                </span>
+                <span className={conf > 75 && conf <= 85 ? 'text-brand-blue font-bold' : ''}>
+                  &gt;75% (2 Tasks)
+                </span>
+                <span className={conf > 85 ? 'text-status-safe font-bold' : ''}>
+                  &gt;85% Real Human
+                </span>
+              </div>
+              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden flex p-0.5 gap-0.5 border border-white/10">
+                <div
+                  className={`h-full rounded-sm transition-all duration-300 ${
+                    conf < 20 && analysisResult?.face_detected ? 'bg-status-danger shadow-glow-safe' : 'bg-status-danger/30'
+                  }`}
+                  style={{ width: '18%' }}
+                />
+                <div
+                  className={`h-full rounded-sm transition-all duration-300 ${
+                    conf >= 50 && conf <= 60 ? 'bg-status-warning' : 'bg-status-warning/30'
+                  }`}
+                  style={{ width: '22%' }}
+                />
+                <div
+                  className={`h-full rounded-sm transition-all duration-300 ${
+                    conf > 60 && conf <= 75 ? 'bg-brand-cyan' : 'bg-brand-cyan/30'
+                  }`}
+                  style={{ width: '20%' }}
+                />
+                <div
+                  className={`h-full rounded-sm transition-all duration-300 ${
+                    conf > 75 && conf <= 85 ? 'bg-brand-blue' : 'bg-brand-blue/30'
+                  }`}
+                  style={{ width: '20%' }}
+                />
+                <div
+                  className={`h-full rounded-sm transition-all duration-300 ${
+                    conf > 85 ? 'bg-status-safe shadow-[0_0_12px_#4ADE80]' : 'bg-status-safe/30'
+                  }`}
+                  style={{ width: '20%' }}
+                />
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* ── "WHY?" STRUCTURED RESULT EXPLANATION ── */}
+          <GlassCard variant="elevated" className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-brand-blue" />
+              <h3 className="text-sm font-bold tracking-wider uppercase text-white">
+                WHY THIS RESULT?
+              </h3>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between pb-2 border-b border-white/6">
+                <span className="text-white/70">Temporal consistency</span>
+                <span className="font-semibold text-status-safe font-mono">
+                  {conf >= 75 ? 'Strong' : conf >= 50 ? 'Moderate' : 'Low'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-2 border-b border-white/6">
+                <span className="text-white/70">Replay attack risk</span>
+                <span
+                  className={`font-semibold font-mono ${
+                    analysisResult?.presentation_attack ? 'text-status-danger font-bold' : 'text-status-safe'
+                  }`}
+                >
+                  {analysisResult?.presentation_attack
+                    ? 'Screen Presentation (100%)'
+                    : replayPct < 25
+                    ? 'Low'
+                    : 'Elevated'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-2 border-b border-white/6">
+                <span className="text-white/70">Synthetic indicators</span>
+                <span className="font-semibold text-status-safe font-mono">
+                  {syntheticPct < 25 ? 'Low' : 'Elevated'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-2 border-b border-white/6">
+                <span className="text-white/70">Ocular visibility status</span>
+                <span
+                  className={`font-semibold font-mono ${
+                    analysisResult?.eye_status === 'BOTH_EYES_VISIBLE'
+                      ? 'text-status-safe'
+                      : analysisResult?.eye_status === 'EYE_TOO_BLURRY'
+                      ? 'text-status-warning'
+                      : 'text-white/70'
+                  }`}
+                >
+                  {analysisResult?.eye_status ? analysisResult.eye_status.replace(/_/g, ' ') : 'STANDBY'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-white/70">Input quality</span>
+                <span className="font-semibold text-white font-mono">
+                  {analysisResult?.quality?.sharpness_label || 'Good'}
+                </span>
+              </div>
+            </div>
+
+            {/* Active Machine-Readable Reason Codes */}
+            {analysisResult?.reason_codes && analysisResult.reason_codes.length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t border-white/6">
+                <span className="text-[10px] font-mono uppercase text-white/40 block">
+                  Active Reason Codes:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {analysisResult.reason_codes.map((code) => {
+                    const info = REASON_CODE_MAP[code] || {
+                      label: code.replace(/_/g, ' '),
+                      severity: 'info',
+                    }
+                    return (
+                      <span
+                        key={code}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono border ${
+                          info.severity === 'danger'
+                            ? 'bg-status-danger/15 border-status-danger/35 text-status-danger font-semibold'
+                            : info.severity === 'warning'
+                            ? 'bg-status-warning/15 border-status-warning/30 text-status-warning'
+                            : info.severity === 'safe'
+                            ? 'bg-status-safe/15 border-status-safe/30 text-status-safe'
+                            : 'bg-white/5 border-white/10 text-white/70'
+                        }`}
+                        title={code}
+                      >
+                        {info.label}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             <p className="text-[11px] text-white/50 leading-relaxed pt-2 border-t border-white/6 italic">
               {analysisResult?.user_message ||
                 '"The observed live sequence contains no strong synthetic-media indicators based on the multi-spectral models evaluated."'}
             </p>
-            </div>
+          </GlassCard>
 
-          {/* ── DEDICATED EYE & OCULAR ANALYSIS CARD (Sections 7-12) ── */}
+          {/* ── DEDICATED EYE & OCULAR ANALYSIS CARD ── */}
           <GlassCard variant="elevated" className="space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-white/6">
               <div className="flex items-center gap-2">
@@ -990,7 +1343,7 @@ export default function LiveCameraScanPage() {
               </div>
             </div>
 
-            {/* Informative notice when eyes are blurry or obscured (Section 10 & 11) */}
+            {/* Informative notice when eyes are blurry or obscured */}
             {(analysisResult?.is_eye_blurry ||
               analysisResult?.is_eye_obscured ||
               analysisResult?.eye_status === 'EYE_TOO_BLURRY' ||
@@ -1011,7 +1364,6 @@ export default function LiveCameraScanPage() {
             )}
           </GlassCard>
 
-
           {/* ── GUIDED PROTOCOL HUD (Smile, Rotation) ── */}
           {analysisResult?.guided_protocol && (
             <GlassCard variant="elevated" className="space-y-4">
@@ -1023,7 +1375,7 @@ export default function LiveCameraScanPage() {
                   </h3>
                 </div>
                 <span className="text-xs font-mono font-bold text-brand-blue">
-                  {analysisResult.guided_protocol.total_marked} / 3 PASSED
+                  {analysisResult.guided_protocol.total_marked} / 2 PASSED
                 </span>
               </div>
 
@@ -1051,7 +1403,6 @@ export default function LiveCameraScanPage() {
                   )}
                 </div>
 
-
                 {/* Task 3: Smooth Rotation */}
                 <div
                   className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
@@ -1078,7 +1429,7 @@ export default function LiveCameraScanPage() {
             </GlassCard>
           )}
 
-          {/* ── MULTI-BENCHMARK MATRIX (Section 30) ── */}
+          {/* ── MULTI-BENCHMARK MATRIX ── */}
           {analysisResult?.benchmarks && (
             <GlassCard variant="elevated" className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-white/6">
