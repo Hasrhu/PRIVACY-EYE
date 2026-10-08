@@ -7,7 +7,7 @@ Full multi-signal pipeline:
 3. Screen Replay & Presentation Attack Detection (Moiré pattern FFT, specular glare)
 4. Face-Swap & Boundary Inconsistency Detection (feathering, color transition, ELA)
 5. Passive Liveness (3D biometric perspective, physiological micro-jitter)
-6. Active Liveness Challenge Engine (Yaw, Pitch, Smile, Blink verification)
+6. Active Liveness Challenge Engine (Yaw, Pitch, Smile verification)
 7. Temporal Multi-Frame Evidence Fusion & Calibrated Risk Engine
 """
 import io
@@ -36,8 +36,6 @@ from app.ml.eye_analyzer import (
     EYES_OBSCURED,
     EYE_PARTIALLY_OCCLUDED,
 )
-from app.ml.blink_engine import BlinkEngine
-from app.ml.blink_detection.blink_detector import MediaPipeBlinkDetector
 from app.ml.screen_detector import ScreenDetector
 
 logger = structlog.get_logger(__name__)
@@ -58,10 +56,8 @@ class LiveAuthenticityEngine:
         self._silent_face = SilentFaceAntiSpoofingEngine()
         self._ffhq_policy = FFHQPolicyProcessor()
 
-        # Dedicated Eye, Blink, and Screen Detectors
+        # Dedicated Eye and Screen Detectors
         self._eye_analyzer = EyeAnalyzer()
-        self._blink_engine = BlinkEngine()
-        self._mp_blink_detector = MediaPipeBlinkDetector()
         self._screen_detector = ScreenDetector()
         self._session_smoothed_confidence: Dict[str, float] = {}
         self._session_start_time: Dict[str, float] = {}
@@ -70,13 +66,7 @@ class LiveAuthenticityEngine:
         self._session_buffers: Dict[str, List[Dict[str, Any]]] = {}
         # Active challenge state: session_id -> {challenge_type, start_time, completed}
         self._session_challenges: Dict[str, Dict[str, Any]] = {}
-        # 10-second blink detection state: session_id -> list of blink timestamps
-        self._session_blinks: Dict[str, List[float]] = {}
-        # Eye openness sliding window: session_id -> list of (timestamp, openness)
-        self._session_eye_states: Dict[str, List[Tuple[float, float]]] = {}
-        # Last blink state: session_id -> {is_closed: bool, closed_since: float}
-        self._session_blink_state: Dict[str, Dict[str, Any]] = {}
-        # Guided Interactive Protocol Tasks (Smile, 3 Blinks, Smooth Rotation)
+        # Guided Interactive Protocol Tasks (Smile, Smooth Rotation)
         self._session_guided_tasks: Dict[str, Dict[str, Any]] = {}
 
     def _init_detector(self):
@@ -489,7 +479,7 @@ class LiveAuthenticityEngine:
             "iod": round(iod, 1),
         }
 
-    # ── 5b. Physiological Biometrics: Blinks, Movements, Lips Alignment ──────
+    # ── 5b. Physiological Biometrics: Movements, Lips Alignment ──────
     def measure_eye_openness(
         self, img_bgr: np.ndarray, landmarks: Dict[str, List[int]]
     ) -> float:
@@ -522,78 +512,6 @@ class LiveAuthenticityEngine:
             scores.append((vert_energy * 0.6) + (p_std * 0.4))
 
         return float(np.mean(scores)) if scores else 15.0
-
-    def detect_and_count_blinks_10s(
-        self, session_id: str, openness: float
-    ) -> Tuple[int, bool, str]:
-        """
-        Tracks eye blink events in a rolling 10-second window.
-        A genuine human blinks ~1 to 5 times per 10 seconds.
-        """
-        now = time.time()
-        if session_id not in self._session_blinks:
-            self._session_blinks[session_id] = []
-        if session_id not in self._session_eye_states:
-            self._session_eye_states[session_id] = []
-        if session_id not in self._session_blink_state:
-            self._session_blink_state[session_id] = {"is_closed": False, "closed_since": 0.0}
-
-        eye_hist = self._session_eye_states[session_id]
-        eye_hist.append((now, openness))
-        # Keep 12s window
-        self._session_eye_states[session_id] = [pt for pt in eye_hist if now - pt[0] <= 12.0]
-
-        # Calculate baseline openness from upper quartile
-        if len(self._session_eye_states[session_id]) >= 4:
-            vals = [s for _, s in self._session_eye_states[session_id]]
-            baseline = float(np.percentile(vals, 75))
-        else:
-            baseline = max(openness, 15.0)
-
-        threshold_close = max(4.0, baseline * 0.62)
-        threshold_open = max(6.0, baseline * 0.82)
-
-        b_state = self._session_blink_state[session_id]
-        blinks_list = self._session_blinks[session_id]
-
-        if not b_state["is_closed"]:
-            # Check if eye just dipped into closed state
-            if openness < threshold_close:
-                b_state["is_closed"] = True
-                b_state["closed_since"] = now
-        else:
-            # Eye was closed; check if it reopened (completing a blink)
-            if openness >= threshold_open:
-                duration = now - b_state["closed_since"]
-                # Natural human blink duration is typically between 0.08s and 0.70s
-                if 0.08 <= duration <= 0.70:
-                    # Prevent duplicate registration within 0.35s
-                    if not blinks_list or (now - blinks_list[-1]) > 0.35:
-                        blinks_list.append(now)
-                        if session_id in self._session_guided_tasks:
-                            self._session_guided_tasks[session_id]["blink_count"] += 1
-                b_state["is_closed"] = False
-            elif (now - b_state["closed_since"]) > 1.2:
-                # Eye closed for > 1.2s - reset
-                b_state["is_closed"] = False
-
-        # Filter blinks strictly in the last 10 seconds
-        valid_blinks = [t for t in blinks_list if now - t <= 10.0]
-        self._session_blinks[session_id] = valid_blinks
-        count_10s = len(valid_blinks)
-
-        # Biological evaluation: 1 to 5 blinks in 10s is normal human physiology
-        if 1 <= count_10s <= 5:
-            matched = True
-            label = f"{count_10s} blinks in 10s (Normal Human Rate)"
-        elif count_10s == 0:
-            matched = False
-            label = "0 blinks in 10s (Awaiting natural blink)"
-        else:
-            matched = False
-            label = f"{count_10s} blinks in 10s (Abnormally rapid)"
-
-        return count_10s, matched, label
 
     def evaluate_head_movements_10s(
         self, session_id: str, current_pose: Dict[str, Any]
@@ -852,8 +770,7 @@ class LiveAuthenticityEngine:
         """
         Evaluates the 3 mandatory live testing instructions:
         1. Smile: Detects whether person smiles with teeth visible or lips widening.
-        2. Blink 3 Times: Scans eye blinks; unmarked if < 3, marked if >= 3.
-        3. Rotate Face Smoothly: Smooth rotation left-right without blurring ears/chin/cheeks/hair/beard.
+        2. Rotate Face Smoothly: Smooth rotation left-right without blurring ears/chin/cheeks/hair/beard.
         """
         if session_id not in self._session_guided_tasks:
             self._session_guided_tasks[session_id] = {
@@ -861,8 +778,7 @@ class LiveAuthenticityEngine:
                 "teeth_detected": False,
                 "lips_wide": False,
                 "max_mouth_ratio": 0.0,
-                "blink_count": 0,
-                "blinks_verified": False,
+
                 "rotation_verified": False,
                 "yaw_min": float(pose["yaw"]),
                 "yaw_max": float(pose["yaw"]),
@@ -921,17 +837,7 @@ class LiveAuthenticityEngine:
         else:
             task_1_label = f"Smile not detected: Please smile or show teeth (Ratio: {mouth_ratio:.2f})"
 
-        # ── Task 2: Blink 3 Times ─────────────────────────────────────────
-        blink_count = int(guided["blink_count"])
-        if blink_count >= 3:
-            guided["blinks_verified"] = True
-            task_2_marked = True
-            task_2_label = f"Blinks Verified: {blink_count} blinks recorded (Target ≥ 3 achieved)"
-        else:
-            task_2_marked = False
-            task_2_label = f"{blink_count} / 3 blinks recorded (Awaiting {3 - blink_count} more blinks)"
-
-        # ── Task 3: Rotate face smoothly without blurring ─────────────────
+        # ── Task 2: Rotate face smoothly without blurring ─────────────────
         curr_yaw = float(pose["yaw"])
         guided["yaw_min"] = min(guided["yaw_min"], curr_yaw)
         guided["yaw_max"] = max(guided["yaw_max"], curr_yaw)
@@ -971,23 +877,17 @@ class LiveAuthenticityEngine:
         else:
             task_3_label = f"Rotation pending: Yaw span {yaw_span:.2f} / 0.20 rad (Rotate face smoothly left & right)"
 
-        total_marked = int((1 if task_1_marked else 0) + (1 if task_2_marked else 0) + (1 if task_3_marked else 0))
+        total_marked = int((1 if task_1_marked else 0) + (1 if task_3_marked else 0))
 
         return {
             "total_marked": total_marked,
-            "all_marked": bool(total_marked == 3),
+            "all_marked": bool(total_marked == 2),
             "task_1_smile": {
                 "marked": bool(task_1_marked),
                 "teeth_detected": bool(guided.get("teeth_detected", False)),
                 "lips_wide": bool(guided.get("lips_wide", False)),
                 "mouth_ratio": round(float(mouth_ratio), 2),
                 "label": str(task_1_label),
-            },
-            "task_2_blinks": {
-                "marked": bool(task_2_marked),
-                "blink_count": int(guided["blink_count"]),
-                "target": 3,
-                "label": str(task_2_label),
             },
             "task_3_rotation": {
                 "marked": bool(task_3_marked),
@@ -1099,16 +999,6 @@ class LiveAuthenticityEngine:
                     "right": {"visible": False, "confidence": 0.0, "ear": 0.0, "state": "UNKNOWN"},
                     "quality": 0.0,
                     "visibility_state": "NONE_VISIBLE",
-                },
-                "blink": {
-                    "detected": False,
-                    "confidence": 0.0,
-                    "count": 0,
-                    "duration_ms": 0.0,
-                    "timestamp_ms": int(time.time() * 1000),
-                    "state": "EYE_OPEN",
-                    "last_blink_timestamp": None,
-                    "event": None,
                 },
                 "processing_ms": int((time.monotonic() - t0) * 1000),
             }
@@ -1288,7 +1178,7 @@ class LiveAuthenticityEngine:
         # 10. Headphone & Ear Accessory Detection
         ear_accessories = self.detect_headphones_and_ear_accessories(img_bgr, face_box)
 
-        # 11. Guided Interactive Protocol Evaluation (Smile, 3 Blinks, Smooth Rotation)
+        # 11. Guided Interactive Protocol Evaluation (Smile, Smooth Rotation)
         # 10. Headphone & Ear Accessory Detection
         ear_accessories = self.detect_headphones_and_ear_accessories(img_bgr, face_box)
 
@@ -1307,33 +1197,9 @@ class LiveAuthenticityEngine:
             head_yaw=float(pose["yaw"]),
         )
         
-        # Overlay MediaPipe Face Mesh EAR and quality results
-        mp_eye_res = self._mp_blink_detector.analyze_eyes(session_id, img_bgr)
-        if mp_eye_res["face_detected"]:
-            # Override with highly precise MediaPipe data
-            eye_res["openness"] = mp_eye_res["openness"]
-            eye_res["mean_ear"] = mp_eye_res["mean_ear"]
-            eye_res["left_ear"] = mp_eye_res["left_ear"]
-            eye_res["right_ear"] = mp_eye_res["right_ear"]
-            eye_res["eye_status"] = mp_eye_res["eye_status"]
-            eye_res["overall_eye_quality"] = mp_eye_res["overall_eye_quality"]
-            eye_res["is_blurry"] = mp_eye_res["is_blurry"]
-            eye_res["is_obscured"] = mp_eye_res["is_obscured"]
-            eye_res["left_eye_visible"] = mp_eye_res["left_eye_visible"]
-            eye_res["right_eye_visible"] = mp_eye_res["right_eye_visible"]
-
         openness = eye_res["openness"]
 
-        # 10d. Biological Blink State Machine & 25s Challenge Timer (STEPS 3, 4, 5)
-        blink_res = self._blink_engine.update(
-            session_id=session_id,
-            openness=openness,
-            eye_analysis=eye_res,
-            face_detected=True,
-        )
-
-        # 11. Guided Interactive Protocol Evaluation (Smile, 3 Blinks, Smooth Rotation)
-        blink_count_10s, blink_matched, blink_label = self.detect_and_count_blinks_10s(session_id, openness)
+        # 11. Guided Interactive Protocol Evaluation (Smile, Smooth Rotation)
         movements_matched, movement_data = self.evaluate_head_movements_10s(session_id, pose)
         lips_matched, lips_data = self.evaluate_lips_alignment(landmarks)
 
@@ -1362,13 +1228,6 @@ class LiveAuthenticityEngine:
             "severity": "low" if eye_res["eye_status"] == BOTH_EYES_VISIBLE else ("medium" if eye_res["is_blurry"] else "high"),
             "detail": f"Quality: {eye_res['overall_eye_quality']:.2f}, Left: {eye_res['left_eye_quality']:.2f}, Right: {eye_res['right_eye_quality']:.2f}",
         })
-        fused_signals.append({
-            "key": "blink_tracking",
-            "label": f"Blinks Recorded: {blink_res['blink_count']} (Last blink: {blink_res['seconds_since_last_blink']}s ago)",
-            "severity": "low" if (not blink_res["is_timer_paused"] or blink_res["blink_count"] > 0) else "medium",
-            "detail": f"Continuous observation: {blink_res['continuous_observation_sec']}s (Timer paused: {blink_res['is_timer_paused']})",
-        })
-
         if screen_res["phone_detected"]:
             fused_signals.append({
                 "key": "phone_screen_detection",
@@ -1380,11 +1239,6 @@ class LiveAuthenticityEngine:
         criteria_evaluation = {
             "total_matches": total_marked,
             "all_matched": bool(total_marked == 3),
-            "blinks": {
-                "count_10s": guided_protocol["task_2_blinks"]["blink_count"],
-                "matched": guided_protocol["task_2_blinks"]["marked"],
-                "label": guided_protocol["task_2_blinks"]["label"],
-            },
             "movements": {
                 "yaw_span": guided_protocol["task_3_rotation"]["yaw_span"],
                 "pitch_span": movement_data.get("pitch_span", 0.0),
@@ -1408,7 +1262,6 @@ class LiveAuthenticityEngine:
 
         # 12. Decision Engine & Reason Codes
         reason_codes = list(eye_res.get("reason_codes", []))
-        reason_codes.extend(blink_res.get("reason_codes", []))
         reason_codes.extend(screen_res.get("reason_codes", []))
 
         vitality_flux = (d_yaw * 6.0) + (d_pitch * 6.0) + (disp_rate * 3.0)
@@ -1431,33 +1284,6 @@ class LiveAuthenticityEngine:
             user_message = "A face appears to be displayed through a phone or electronic screen."
             reliability = "HIGH"
 
-        # ── CASE 4: 25-SECOND NO-BLINK CHALLENGE PROTOCOL ───────────────────
-        elif blink_res["challenge"]["active"]:
-            # Active "PLEASE BLINK" challenge countdown
-            calc_conf = 45.0 + time_flux
-            confidence = round(float(max(40.0, min(50.0, calc_conf))), 1)
-            assessment = "BLINK_CHALLENGE_REQUESTED"
-            category_label = "PLEASE BLINK"
-            explanation = (
-                "We haven't detected a clear blink in 25 seconds of clear observation. "
-                "Please blink once to continue verification."
-            )
-            user_message = "Please blink once to continue verification."
-            reliability = "MEDIUM"
-
-        elif blink_res["challenge"]["status"] == "FAILED":
-            # 25-second challenge failed without blink: enforce 20-30% liveness ceiling
-            confidence = round(float(min(28.0, 24.5 + time_flux)), 1)
-            liveness_score = round(confidence / 100.0, 3)
-            assessment = "UNABLE_TO_DETERMINE"
-            category_label = "Likely live human: Low reliability (No blink verified)"
-            explanation = (
-                "No clear blink was detected during the 25-second verification window. "
-                "Liveness confidence is calibrated to a low-certainty ceiling."
-            )
-            user_message = "A clear blink was not detected. Reliability has been reduced."
-            reliability = "LOW"
-
         # ── CASE 3: EYES BLURRY OR NOT VISIBLE ──────────────────────────────
         elif eye_res["is_blurry"] or eye_res["eye_status"] in (EYE_TOO_BLURRY, BOTH_EYES_NOT_VISIBLE, EYES_OBSCURED):
             # Eye signal unavailable; derive confidence strictly from other criteria (spatial, temporal, quality, benchmarks)
@@ -1479,7 +1305,7 @@ class LiveAuthenticityEngine:
             category_label = "Real human face"
             assessment = "REAL_HUMAN_FACE"
             explanation = (
-                "All 3 live instructions verified: Authentic smile with teeth/wide lips, 3 genuine eye blinks, "
+                "All 2 live instructions verified: Authentic smile with teeth/wide lips, "
                 "and smooth head rotation without blurring or warping."
             )
             user_message = "All liveness criteria verified successfully."
@@ -1504,7 +1330,7 @@ class LiveAuthenticityEngine:
             assessment = "HUMAN_FACE_DETECTED"
             explanation = (
                 "1 live instruction completed. Human face detected. "
-                "Follow the remaining instructions (smile, blink 3 times, rotate face) to verify liveness."
+                "Follow the remaining instructions (smile, rotate face) to verify liveness."
             )
             user_message = "Follow instructions to verify active presence."
             reliability = "MEDIUM"
@@ -1516,7 +1342,7 @@ class LiveAuthenticityEngine:
             assessment = "INSTRUCTION_NOT_FOLLOWED"
             explanation = (
                 "Natural human facial structure and eyes detected, but none of the 3 live testing instructions "
-                "have been performed. Please smile, blink 3 times, and rotate your face smoothly."
+                "have been performed. Please smile and rotate your face smoothly."
             )
             user_message = "Please follow the 3 instructions above to complete verification."
             reliability = "MEDIUM" if quality["quality_index"] >= 50 else "LOW"
@@ -1564,8 +1390,6 @@ class LiveAuthenticityEngine:
                     "visible": eye_res.get("left_eye_visible", False),
                     "confidence": eye_res.get("left_eye_quality", 0.0),
                     "ear": eye_res.get("left_ear", 0.0),
-                    "state": blink_res.get("left_eye_state", "OPEN"),
-                    "open": blink_res.get("left_eye_open", True),
                     "bbox": eye_res.get("left_eye_bbox"),
                     "center": eye_res.get("left_eye_center"),
                     "landmarks": eye_res.get("left_eye_landmarks"),
@@ -1574,54 +1398,13 @@ class LiveAuthenticityEngine:
                     "visible": eye_res.get("right_eye_visible", False),
                     "confidence": eye_res.get("right_eye_quality", 0.0),
                     "ear": eye_res.get("right_ear", 0.0),
-                    "state": blink_res.get("right_eye_state", "OPEN"),
-                    "open": blink_res.get("right_eye_open", True),
                     "bbox": eye_res.get("right_eye_bbox"),
                     "center": eye_res.get("right_eye_center"),
                     "landmarks": eye_res.get("right_eye_landmarks"),
                 },
-                "left_eye_open": blink_res.get("left_eye_open", True),
-                "right_eye_open": blink_res.get("right_eye_open", True),
-                "left_EAR": blink_res.get("left_EAR", eye_res.get("left_ear", 0.0)),
-                "right_EAR": blink_res.get("right_EAR", eye_res.get("right_ear", 0.0)),
-                "left_eye_state": blink_res.get("left_eye_state", "OPEN"),
-                "right_eye_state": blink_res.get("right_eye_state", "OPEN"),
                 "quality": eye_res.get("overall_eye_quality", 0.0),
                 "visibility_state": eye_res.get("eye_visibility", "BOTH_VISIBLE"),
             },
-            # Part 18 Structured Blink Subsystem Output
-            "blink": {
-                "blink_detected": blink_res.get("just_blinked", False),
-                "detected": blink_res.get("just_blinked", False),
-                "blink_count": blink_res.get("blink_count", 0),
-                "count": blink_res.get("blink_count", 0),
-                "blink_confidence": (blink_res.get("last_blink_event") or {}).get("blink_confidence", 0.92) if blink_res.get("just_blinked") else 0.0,
-                "confidence": (blink_res.get("last_blink_event") or {}).get("blink_confidence", 0.92) if blink_res.get("just_blinked") else 0.0,
-                "eye_visibility": round(float(eye_res.get("eye_visibility_score", 1.0)), 2),
-                "left_eye_state": blink_res.get("left_eye_state", "OPEN"),
-                "right_eye_state": blink_res.get("right_eye_state", "OPEN"),
-                "duration_ms": (blink_res.get("last_blink_event") or {}).get("duration_ms", 0.0) if blink_res.get("just_blinked") else 0.0,
-                "timestamp_ms": (blink_res.get("last_blink_event") or {}).get("timestamp_ms", int(time.time() * 1000)),
-                "state": blink_res.get("state", "OPEN"),
-                "state_sequence": blink_res.get("state_sequence", ["OPEN"]),
-                "last_blink_timestamp": blink_res.get("last_blink_timestamp"),
-                "event": blink_res.get("blink_event"),
-            },
-            "blink_status": (
-                "CHALLENGE_ACTIVE"
-                if blink_res["challenge"]["active"]
-                else (
-                    "CHALLENGE_FAILED"
-                    if blink_res["challenge"]["status"] == "FAILED"
-                    else ("PAUSED" if blink_res["is_timer_paused"] else "TRACKING")
-                )
-            ),
-            "blink_count": blink_res["blink_count"],
-            "seconds_since_last_blink": blink_res["seconds_since_last_blink"],
-            "continuous_observation_sec": blink_res["continuous_observation_sec"],
-            "is_blink_timer_paused": blink_res["is_timer_paused"],
-            "timer_pause_reason": blink_res["timer_pause_reason"],
-            "blink_challenge": blink_res["challenge"],
             "phone_detected": screen_res["phone_detected"],
             "screen_face_associated": screen_res["screen_face_associated"],
             "presentation_attack": screen_res["presentation_attack"],

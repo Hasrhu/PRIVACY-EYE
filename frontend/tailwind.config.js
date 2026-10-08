@@ -9,22 +9,21 @@ module.exports = {
     extend: {
       colors: {
         canvas: {
-          DEFAULT: '#05070D',
-          surface: '#080B12',
-          card: '#0D111C',
+          DEFAULT: '#000000',
+          surface: '#050505',
+          card: '#080808',
           border: 'rgba(255, 255, 255, 0.08)',
         },
         brand: {
-          blue: '#5EA7FF',
-          violet: '#9B7CFF',
-          cyan: '#38BDF8',
-          glow: 'rgba(94, 167, 255, 0.22)',
+          cyan: '#13D2E8',
+          violet: '#C010ED',
+          glow: 'rgba(19, 210, 232, 0.22)',
         },
         status: {
-          safe: '#4ADE80',
-          warning: '#FBBF24',
-          danger: '#FB7185',
-          undetermined: '#94A3B8',
+          safe: '#13D2E8',
+          warning: '#C010ED',
+          danger: '#F90202',
+          undetermined: 'rgba(255, 255, 255, 0.40)',
         },
       },
       borderRadius: {
@@ -41,12 +40,12 @@ module.exports = {
         '2xl': '28px',
       },
       boxShadow: {
-        glass: '0 10px 30px -10px rgba(0, 0, 0, 0.5)',
-        'glass-hover': '0 16px 40px -10px rgba(0, 0, 0, 0.6), 0 0 24px rgba(94, 167, 255, 0.12)',
-        'glass-floating': '0 24px 64px rgba(0, 0, 0, 0.65), 0 0 32px rgba(94, 167, 255, 0.1)',
-        'glow-blue': '0 0 35px rgba(94, 167, 255, 0.28)',
-        'glow-violet': '0 0 35px rgba(155, 124, 255, 0.25)',
-        'glow-safe': '0 0 30px rgba(74, 222, 128, 0.25)',
+        glass: '0 10px 30px -10px rgba(0, 0, 0, 0.8)',
+        'glass-hover': '0 16px 40px -10px rgba(0, 0, 0, 0.9), 0 0 24px rgba(19, 210, 232, 0.12)',
+        'glass-floating': '0 24px 64px rgba(0, 0, 0, 0.9), 0 0 32px rgba(19, 210, 232, 0.1)',
+        'glow-blue': '0 0 35px rgba(19, 210, 232, 0.28)',
+        'glow-violet': '0 0 35px rgba(192, 16, 237, 0.25)',
+        'glow-safe': '0 0 30px rgba(19, 210, 232, 0.25)',
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],

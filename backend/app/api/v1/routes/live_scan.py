@@ -59,7 +59,6 @@ class SaveAuditSessionPayload(BaseModel):
     consent_given: Optional[bool] = None
     landmarks: Optional[dict] = None
     eye_status: Optional[str] = None
-    blink_count: Optional[int] = None
     phone_detected: Optional[bool] = None
     presentation_attack: Optional[bool] = None
     reason_codes: Optional[List[str]] = None

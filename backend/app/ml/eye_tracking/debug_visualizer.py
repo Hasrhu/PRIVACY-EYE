@@ -1,7 +1,7 @@
 """
 Privacy Eye — Part 17: Development Visual Debug Mode
 Overlays face bounding boxes, 6-point eye contours, ocular bounding boxes,
-EAR telemetry, blink state transitions, and confidence indicators for forensic inspection.
+EAR telemetry and confidence indicators for forensic inspection.
 """
 from typing import Dict, Any, Optional
 import cv2
@@ -19,11 +19,11 @@ class EyeDebugVisualizer:
         img_bgr: np.ndarray,
         face_box: Optional[list],
         eye_data: Dict[str, Any],
-        blink_data: Dict[str, Any],
+
         fps: float = 30.0,
     ) -> np.ndarray:
         """
-        Draws anatomical landmarks, bounding boxes, EAR telemetry, and blink states.
+        Draws anatomical landmarks, bounding boxes, and EAR telemetry.
         """
         canvas = img_bgr.copy()
         h, w = canvas.shape[:2]
@@ -64,20 +64,14 @@ class EyeDebugVisualizer:
         # Text Lines
         l_ear = float(left_eye.get("ear", eye_data.get("left_ear", 0.0)))
         r_ear = float(right_eye.get("ear", eye_data.get("right_ear", 0.0)))
-        left_state = blink_data.get("left_eye_state", eye_data.get("left_eye_state", "OPEN"))
-        right_state = blink_data.get("right_eye_state", eye_data.get("right_eye_state", "OPEN"))
-        state = blink_data.get("state", "OPEN")
-        b_count = blink_data.get("blink_count", 0)
-        just_blinked = blink_data.get("just_blinked", False)
+        left_state = eye_data.get("left_eye_state", "OPEN")
+        right_state = eye_data.get("right_eye_state", "OPEN")
         quality = eye_data.get("overall_eye_quality", 0.0)
 
         lines = [
             (f"PRIVACY EYE — OCULAR DEBUG", (0, 240, 255)),
             (f"LEFT EYE: {left_state} (EAR: {l_ear:.3f})", (0, 255, 128) if left_state == "OPEN" else (0, 180, 255)),
             (f"RIGHT EYE: {right_state} (EAR: {r_ear:.3f})", (0, 255, 128) if right_state == "OPEN" else (0, 180, 255)),
-            (f"BLINK STATE: {state}", (0, 255, 128) if state == "OPEN" else ((0, 255, 255) if state in ("CLOSING", "OPENING") else (0, 100, 255))),
-            (f"BLINK COUNT: {b_count}", (255, 255, 255)),
-            (f"{'BLINK DETECTED ✓' if just_blinked else 'STABLE'}", (0, 255, 0) if just_blinked else (150, 150, 150)),
         ]
 
         y_offset = 32

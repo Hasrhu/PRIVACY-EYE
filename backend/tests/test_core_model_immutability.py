@@ -14,14 +14,14 @@ from unittest.mock import patch
 
 from app.ml.live_authenticity import live_authenticity_engine
 from app.ml.eye_analyzer import EyeAnalyzer, BOTH_EYES_VISIBLE
-from app.ml.blink_engine import BlinkEngine
+
 from app.ml.screen_detector import ScreenDetector
 
 
 def test_core_model_components_unmodified():
     """Verifies that all internal ML engines and analyzers remain intact."""
     assert isinstance(live_authenticity_engine._eye_analyzer, EyeAnalyzer)
-    assert isinstance(live_authenticity_engine._blink_engine, BlinkEngine)
+
     assert isinstance(live_authenticity_engine._screen_detector, ScreenDetector)
 
 
@@ -83,7 +83,7 @@ def test_core_model_detected_face_contract():
         assert "replay_score" in res
         assert "presentation_attack_score" in res
         assert "eye_status" in res
-        assert "blink_count" in res
+
         assert "signals" in res
         assert "benchmarks" in res
         assert "guided_protocol" in res

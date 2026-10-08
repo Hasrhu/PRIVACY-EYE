@@ -216,7 +216,7 @@ export const Hero3DScene: React.FC = () => {
             </div>
 
             <p className="text-[11px] text-white/60 leading-snug">
-              5-point landmark vector tracking with smooth physiological blink rate.
+              5-point landmark vector tracking with smooth physiological micro-motion.
             </p>
 
             <div className="pt-1 flex items-center gap-2 text-[10px] font-mono text-brand-blue">

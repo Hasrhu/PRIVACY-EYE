@@ -91,25 +91,6 @@ class ScanReportService:
         elif is_obscured or is_blurry:
             why_reasons.append(f"Ocular liveness limited due to {eye_status.replace('_', ' ').lower()}")
 
-        # 3. Blink Detection & Rate
-        blink_count = snapshot.get("blink_count", 0)
-        blink_status = snapshot.get("blink_status", "TRACKING")
-        blink_passed = (blink_count > 0 and blink_status != "CHALLENGE_FAILED")
-
-        tests.append({
-            "test_name": "Blink Detection",
-            "status": "PASS" if blink_passed else ("WARNING" if blink_status == "CHALLENGE_ACTIVE" else "FAIL"),
-            "score": min(1.0, blink_count / 3.0),
-            "message": f"{blink_count} confirmed biological blinks observed",
-        })
-        signals.append({
-            "signal_name": "BIOLOGICAL_BLINK",
-            "signal_value": f"{blink_count} blinks ({blink_status})",
-            "signal_status": "PASS" if blink_passed else "WARNING",
-            "signal_explanation": "Biological involuntary eyelid closure pattern verified",
-        })
-        if blink_passed:
-            why_reasons.append(f"{blink_count} confirmed biological blinks detected during observation window")
 
         # 4. Liveness & Micro-motion Analysis
         liveness_score = snapshot.get("liveness_score") or (float(snapshot.get("confidence", 75.0)) / 100.0)

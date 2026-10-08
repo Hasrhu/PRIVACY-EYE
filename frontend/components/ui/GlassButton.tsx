@@ -10,6 +10,8 @@ interface GlassButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
   children: React.ReactNode
 }
 
+import { GlowEffect } from '../core/glow-effect'
+
 export const GlassButton: React.FC<GlassButtonProps> = ({
   variant = 'primary',
   size = 'md',
@@ -24,7 +26,7 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
     primary: 'btn-primary',
     secondary: 'btn-secondary',
     ghost: 'btn-ghost',
-    danger: 'bg-status-danger/20 text-status-danger border border-status-danger/40 hover:bg-status-danger/30',
+    danger: 'bg-[rgba(249,2,2,0.1)] text-[#F90202] border border-[#F90202]/40 hover:bg-[#F90202]/20',
   }[variant]
 
   const sizeStyles = {
@@ -33,12 +35,12 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
     lg: 'text-base px-7 py-3.5 rounded-2xl font-semibold',
   }[size]
 
-  return (
+  const buttonElement = (
     <button
       className={clsx(
         variantStyles,
         sizeStyles,
-        'transition-all duration-200 inline-flex items-center justify-center gap-2 select-none',
+        'transition-all duration-200 inline-flex items-center justify-center gap-2 select-none relative w-full',
         isLoading && 'opacity-70 pointer-events-none',
         className
       )}
@@ -53,6 +55,25 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
       <span>{children}</span>
     </button>
   )
+
+  if (variant === 'primary' || variant === 'danger') {
+    const isDanger = variant === 'danger'
+    const colors = isDanger ? ['#F90202', '#C010ED'] : ['#13D2E8', '#C010ED']
+    return (
+      <div className={`relative inline-block ${className?.includes('w-full') ? 'w-full' : ''}`}>
+        <GlowEffect 
+          colors={colors} 
+          mode="colorShift" 
+          blur="soft" 
+          duration={5} 
+          scale={1.05} 
+        />
+        {buttonElement}
+      </div>
+    )
+  }
+
+  return buttonElement
 }
 
 export default GlassButton

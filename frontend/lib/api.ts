@@ -210,7 +210,6 @@ export const liveScanApi = {
     consent_given?: boolean
     landmarks?: any
     eye_status?: string
-    blink_count?: number
     phone_detected?: boolean
     presentation_attack?: boolean
     reason_codes?: string[]

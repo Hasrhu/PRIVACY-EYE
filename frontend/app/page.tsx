@@ -24,6 +24,7 @@ import { BrandLogo } from '@/components/layout/BrandLogo'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { GlassButton } from '@/components/ui/GlassButton'
 import { GlassBadge } from '@/components/ui/GlassBadge'
+import { PrivacyGlowButton } from '@/components/core/privacy-glow-button'
 import { Footer } from '@/components/layout/Footer'
 import { Hero3DScene } from '@/components/landing/Hero3DScene'
 import { authApi, getErrorMessage } from '@/lib/api'
@@ -49,7 +50,7 @@ const FEATURES: FeatureDetail[] = [
     icon: Camera,
     color: '#5EA7FF',
     description:
-      'Detects micro-motion dynamics across eyes, nose tip, and mouth corners. Fuses 3D head yaw/pitch trajectory with biological blink rates to invalidate 2D photo cutouts and silicone presentation attacks.',
+      'Detects micro-motion dynamics across eyes, nose tip, and mouth corners. Fuses 3D head yaw/pitch trajectory to invalidate 2D photo cutouts and silicone presentation attacks.',
     metrics: ['Sub-12ms Inference Latency', 'Continuous Pose Estimation', 'Laplacian Clarity Gating'],
     liveState: 'ACTIVE · 98.4% CONFIDENCE',
   },
@@ -120,7 +121,7 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="relative min-h-screen flex flex-col bg-canvas text-white selection:bg-brand-blue/30 overflow-x-hidden">
+    <div className="relative min-h-screen flex flex-col bg-canvas text-white selection:bg-brand-cyan/30 overflow-x-hidden">
       {/* ── TOP FLOATING GLASS NAVIGATION (Matching Reference Pill) ── */}
       <header className="fixed top-4 left-0 right-0 z-50 px-4 md:px-8 max-w-7xl mx-auto pointer-events-none">
         <motion.div
@@ -165,7 +166,7 @@ export default function LandingPage() {
                 setAuthMode('REGISTER')
                 setAuthModalOpen(true)
               }}
-              className="text-xs font-bold px-5 py-2 rounded-full bg-gradient-to-r from-brand-blue via-brand-cyan to-brand-violet text-white shadow-glow-blue border border-white/20 transition-all cursor-pointer"
+              className="text-xs font-bold px-5 py-2 rounded-full bg-gradient-to-r from-brand-cyan via-brand-cyan to-brand-violet text-white shadow-glow-cyan border border-white/20 transition-all cursor-pointer"
             >
               Get Started
             </motion.button>
@@ -179,11 +180,11 @@ export default function LandingPage() {
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-surface border border-brand-blue/30 mb-6 shadow-glow-blue text-xs font-mono text-brand-blue"
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-surface border border-brand-cyan/30 mb-6 shadow-glow-cyan text-xs font-mono text-brand-cyan"
         >
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-blue opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-blue" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-cyan opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-cyan" />
           </span>
           <span>INTERACTIVE 3D PARALLAX · MOVE CURSOR & SCROLL</span>
         </motion.div>
@@ -196,7 +197,7 @@ export default function LandingPage() {
           className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[1.04] max-w-5xl"
         >
           SEE THROUGH{' '}
-          <span className="bg-gradient-to-r from-brand-blue via-brand-cyan to-brand-violet bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-brand-cyan via-brand-cyan to-brand-violet bg-clip-text text-transparent">
             THE FAKE.
           </span>
         </motion.h1>
@@ -221,7 +222,7 @@ export default function LandingPage() {
       {/* ── 3D INTERACTIVE FEATURE MATRICES (Section 19 & 30) ── */}
       <section id="features-3d" className="py-24 px-4 md:px-8 max-w-7xl mx-auto w-full space-y-12">
         <div className="text-center max-w-3xl mx-auto space-y-3">
-          <span className="text-xs font-mono uppercase tracking-widest text-brand-blue">
+          <span className="text-xs font-mono uppercase tracking-widest text-brand-cyan">
             Multi-Signal Forensic Defense
           </span>
           <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white">
@@ -249,7 +250,7 @@ export default function LandingPage() {
                 }}
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setSelectedFeature(feat)}
-                className="relative rounded-3xl p-6 glass-floating border border-white/12 shadow-glass hover:border-brand-blue/40 cursor-pointer overflow-hidden group text-left transition-colors"
+                className="relative rounded-3xl p-6 glass-floating border border-white/12 shadow-glass hover:border-brand-cyan/40 cursor-pointer overflow-hidden group text-left transition-colors"
                 style={{ transformStyle: 'preserve-3d' }}
               >
                 {/* Background ambient corner flare */}
@@ -271,7 +272,7 @@ export default function LandingPage() {
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-bold text-white group-hover:text-brand-blue transition-colors">
+                    <h3 className="text-lg font-bold text-white group-hover:text-brand-cyan transition-colors">
                       {feat.title}
                     </h3>
                     <p className="text-xs text-white/50 mt-1 font-mono">{feat.subtitle}</p>
@@ -285,7 +286,7 @@ export default function LandingPage() {
                     <span className="font-mono text-[10px] text-status-safe font-bold">
                       {feat.liveState.split('·')[0]}
                     </span>
-                    <span className="text-brand-blue font-semibold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                    <span className="text-brand-cyan font-semibold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                       Inspect <ArrowRight className="w-3.5 h-3.5" />
                     </span>
                   </div>
@@ -477,7 +478,7 @@ export default function LandingPage() {
                   whileTap={{ scale: 0.97 }}
                   type="submit"
                   disabled={authLoading}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-blue to-brand-violet text-white font-bold text-xs tracking-wider uppercase shadow-glow-blue mt-2 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-cyan to-brand-violet text-white font-bold text-xs tracking-wider uppercase shadow-glow-cyan mt-2 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {authLoading ? 'Verifying...' : authMode === 'LOGIN' ? 'Sign In & Launch' : 'Create & Access'}
                   <ArrowRight className="w-4 h-4" />
@@ -514,9 +515,9 @@ export default function LandingPage() {
 
           <div className="flex flex-col gap-4 w-full md:w-auto">
             <Link href="/dashboard/live-scan">
-              <GlassButton variant="primary" size="lg" className="w-full">
+              <PrivacyGlowButton size="lg" fullWidth>
                 Launch Live Viewfinder
-              </GlassButton>
+              </PrivacyGlowButton>
             </Link>
             <Link href="/dashboard/privacy">
               <GlassButton variant="secondary" size="lg" className="w-full">

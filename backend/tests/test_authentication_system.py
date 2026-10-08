@@ -162,7 +162,7 @@ async def test_acceptance_5_multi_tenant_idor_isolation(async_client: AsyncClien
         "assessment": "REAL_HUMAN",
         "confidence": 94.5,
         "quality_index": 92,
-        "signals": [{"key": "ocular", "label": "Blink detected", "severity": "low"}],
+        "signals": [{"key": "ocular", "label": "Eyes visible", "severity": "low"}],
         "explanation": "User B authentic test scan.",
     }
     save_res = await async_client.post(

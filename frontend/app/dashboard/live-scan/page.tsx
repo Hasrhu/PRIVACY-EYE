@@ -70,12 +70,7 @@ interface GuidedProtocol {
     mouth_ratio: number
     label: string
   }
-  task_2_blinks: {
-    marked: boolean
-    blink_count: number
-    target: number
-    label: string
-  }
+
   task_3_rotation: {
     marked: boolean
     yaw_span: number
@@ -96,11 +91,7 @@ interface EarAccessories {
 interface CriteriaEvaluation {
   total_matches: number
   all_matched: boolean
-  blinks: {
-    count_10s: number
-    matched: boolean
-    label: string
-  }
+
   movements: {
     yaw_span: number
     pitch_span: number
@@ -142,21 +133,6 @@ interface LiveFrameResult {
   right_eye_visible?: boolean
   left_eye_quality?: number
   right_eye_quality?: number
-  // Blink & 25-Second Observation Engine
-  blink_status?: string
-  blink_count?: number
-  seconds_since_last_blink?: number
-  continuous_observation_sec?: number
-  is_blink_timer_paused?: boolean
-  timer_pause_reason?: string
-  blink_challenge?: {
-    active: boolean
-    start_time?: number
-    duration_sec?: number
-    countdown_remaining_sec?: number
-    status?: string
-    prompt?: string
-  }
   // Phone & Electronic Screen Detection
   phone_detected?: boolean
   screen_face_associated?: boolean
@@ -268,18 +244,6 @@ const REASON_CODE_MAP: Record<string, { label: string; severity: 'safe' | 'warni
   },
   EYES_OBSCURED_SUNGLASSES: {
     label: 'Eyes obscured by sunglasses or dark lenses',
-    severity: 'warning',
-  },
-  BLINK_DETECTED: {
-    label: 'Natural biological blink event verified',
-    severity: 'safe',
-  },
-  BLINK_CHALLENGE_REQUESTED: {
-    label: '25s no-blink challenge active: Please blink once',
-    severity: 'warning',
-  },
-  BLINK_CHALLENGE_FAILED: {
-    label: 'No blink verified in 25s — Liveness confidence capped (20-30%)',
     severity: 'warning',
   },
   MULTIPLE_FACES_DETECTED: {
@@ -705,7 +669,6 @@ export default function LiveCameraScanPage() {
         consent_given: consentGiven,
         landmarks: analysisResult.landmarks,
         eye_status: analysisResult.eye_status,
-        blink_count: analysisResult.blink_count,
         phone_detected: analysisResult.phone_detected,
         presentation_attack: analysisResult.presentation_attack,
         reason_codes: analysisResult.reason_codes,
@@ -954,448 +917,6 @@ export default function LiveCameraScanPage() {
                     </span>
                   </div>
                 )}
-
-                {/* Blink Tracker Badge */}
-                {analysisResult?.blink_count !== undefined && (
-                  <div className="px-3 py-1 rounded-full glass-surface border border-white/12 flex items-center gap-1.5 text-[11px] font-mono text-white/80">
-                    <Timer className="w-3.5 h-3.5 text-brand-cyan" />
-                    <span>
-                      {analysisResult.blink_count} Blinks
-                      {analysisResult.is_blink_timer_paused ? ' (Paused)' : ''}
-                    </span>
-                  </div>
-                )}
-
-                {/* Hardware Headphone Badge */}
-                {analysisResult?.ear_accessories && (
-                  <div className="px-3 py-1 rounded-full glass-surface border border-white/12 flex items-center gap-1.5 text-[11px] font-mono">
-                    <Headphones
-                      className={`w-3.5 h-3.5 ${
-                        analysisResult.ear_accessories.detected ? 'text-brand-violet' : 'text-white/40'
-                      }`}
-                    />
-                    <span
-                      className={
-                        analysisResult.ear_accessories.detected ? 'text-brand-violet font-semibold' : 'text-white/50'
-                      }
-                    >
-                      {analysisResult.ear_accessories.detected
-                        ? analysisResult.ear_accessories.accessory_type.replace(/_/g, ' ')
-                        : 'No Hardware'}
-                    </span>
-                  </div>
-                )}
-
-                {/* Phone In Scene (Case A: Non-Attacking Phone in hand/pocket) */}
-                {analysisResult?.phone_detected && !analysisResult.presentation_attack && (
-                  <div className="px-3 py-1 rounded-full glass-surface border border-brand-blue/40 flex items-center gap-1.5 text-[11px] font-mono text-brand-blue">
-                    <Smartphone className="w-3.5 h-3.5" />
-                    <span>Device in Scene (Holding)</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Floating Glass Pill at Bottom (Matching Reference Screenshot Design) */}
-            {isCameraActive && (
-              <div className="absolute bottom-5 inset-x-0 z-20 flex justify-center px-4 pointer-events-none">
-                <div className="relative overflow-hidden flex items-center justify-between w-full max-w-sm h-12 px-5 rounded-2xl glass-floating border border-white/20 shadow-glass-floating backdrop-blur-2xl">
-                  {/* Calibrated progress background fill */}
-                  <div
-                    className="absolute inset-y-0 left-0 bg-status-safe/20 transition-all duration-300"
-                    style={{ width: `${Math.min(100, Math.max(12, conf))}%` }}
-                  />
-                  <div className="relative z-10 flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-2 h-2 rounded-full bg-status-safe animate-ping" />
-                      <span className="text-xs font-bold tracking-wide text-white truncate">
-                        {analysisResult?.face_detected
-                          ? analysisResult.category_label
-                          : isAnalyzing
-                          ? 'Analyzing...'
-                          : 'Waiting for Face'}
-                      </span>
-                    </div>
-                    <span className="text-xs font-mono font-extrabold text-white ml-2 flex-shrink-0">
-                      {analysisResult?.face_detected ? `${conf.toFixed(0)}%` : '—'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── METRICS BELOW CAMERA (Section 16 requirement) ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <GlassCard variant="elevated" className="p-3.5 space-y-1">
-              <span className="text-[10px] font-mono uppercase text-white/50 block">Liveness</span>
-              <p className="text-xl font-bold font-mono text-status-safe">
-                {analysisResult ? `${livenessPct}%` : '—'}
-              </p>
-              <span className="text-[10px] text-white/40 block">Micro-motion</span>
-            </GlassCard>
-
-            <GlassCard variant="elevated" className="p-3.5 space-y-1">
-              <span className="text-[10px] font-mono uppercase text-white/50 block">Synthetic Risk</span>
-              <p className="text-xl font-bold font-mono text-status-warning">
-                {analysisResult ? `${syntheticPct}%` : '—'}
-              </p>
-              <span className="text-[10px] text-white/40 block">Spatial Residuals</span>
-            </GlassCard>
-
-            <GlassCard variant="elevated" className="p-3.5 space-y-1">
-              <span className="text-[10px] font-mono uppercase text-white/50 block">Replay Risk</span>
-              <p
-                className={`text-xl font-bold font-mono ${
-                  analysisResult?.presentation_attack ? 'text-status-danger' : 'text-brand-blue'
-                }`}
-              >
-                {analysisResult ? `${replayPct}%` : '—'}
-              </p>
-              <span className="text-[10px] text-white/40 block">
-                {analysisResult?.presentation_attack ? 'Screen Presentation' : 'Fourier PAD'}
-              </span>
-            </GlassCard>
-
-            <GlassCard variant="elevated" className="p-3.5 space-y-1">
-              <span className="text-[10px] font-mono uppercase text-white/50 block">Eye Quality</span>
-              <p className="text-xl font-bold font-mono text-white">
-                {analysisResult?.overall_eye_quality !== undefined
-                  ? `${analysisResult.overall_eye_quality}%`
-                  : analysisResult?.quality?.sharpness_label || 'GOOD'}
-              </p>
-              <span className="text-[10px] text-white/40 block">
-                {analysisResult?.eye_status === 'BOTH_EYES_VISIBLE'
-                  ? 'Both Visible'
-                  : analysisResult?.eye_status === 'EYE_TOO_BLURRY'
-                  ? 'Blurry'
-                  : 'Ocular Quality'}
-              </span>
-            </GlassCard>
-
-            <GlassCard variant="elevated" className="p-3.5 space-y-1 col-span-2 sm:col-span-1">
-              <span className="text-[10px] font-mono uppercase text-white/50 block">Blinks Verified</span>
-              <p className="text-xl font-bold font-mono text-brand-cyan">
-                {analysisResult?.blink_count !== undefined ? `${analysisResult.blink_count}` : '0'}
-              </p>
-              <span className="text-[10px] text-white/40 block">
-                {analysisResult?.seconds_since_last_blink !== undefined
-                  ? `Last: ${analysisResult.seconds_since_last_blink}s ago`
-                  : '25s Tracker'}
-              </span>
-            </GlassCard>
-          </div>
-
-          {/* Action bar below camera */}
-          <GlassCard variant="base" className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <label className="flex items-center gap-2.5 text-xs text-white/80 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={challengeMode}
-                onChange={(e) => setChallengeMode(e.target.checked)}
-                className="w-4 h-4 rounded bg-white/10 border-white/20 text-brand-blue focus:ring-0"
-              />
-              <span>Active Head Pose Challenge Nonce</span>
-            </label>
-
-            <div className="flex items-center gap-2">
-              <GlassButton
-                variant="primary"
-                size="sm"
-                onClick={openReportSaveModal}
-                disabled={!analysisResult || !analysisResult.face_detected}
-                icon={<FileText className="w-3.5 h-3.5" />}
-                className="shadow-glow-blue"
-              >
-                Save Scan Report
-              </GlassButton>
-
-              <GlassButton
-                variant="secondary"
-                size="sm"
-                onClick={openConsentModal}
-                disabled={!analysisResult || !analysisResult.face_detected}
-                icon={<Save className="w-3.5 h-3.5" />}
-              >
-                Training Consent
-              </GlassButton>
-            </div>
-          </GlassCard>
-
-          {/* Scan Report Saved Live Banner */}
-          {savedScanReport && (
-            <GlassCard
-              variant="elevated"
-              className="p-5 rounded-3xl border-2 border-brand-cyan/40 bg-brand-cyan/10 backdrop-blur-xl space-y-3"
-            >
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-brand-cyan/20 border border-brand-cyan/40 flex items-center justify-center text-brand-cyan flex-shrink-0">
-                    <CheckCircle2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-                        REPORT PERSISTED
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md bg-brand-cyan/20 text-[10px] font-mono font-bold text-brand-cyan">
-                        {savedScanReport.report_number}
-                      </span>
-                    </div>
-                    <p className="text-xs text-white/70 mt-0.5">
-                      Result: <strong className="text-white">{savedScanReport.assessment.replace(/_/g, ' ')}</strong> ({savedScanReport.confidence.toFixed(1)}%)
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link href={`/dashboard/reports/${savedScanReport.id}`}>
-                    <GlassButton variant="primary" size="sm" icon={<ExternalLink className="w-3.5 h-3.5" />}>
-                      View Report
-                    </GlassButton>
-                  </Link>
-                  <GlassButton
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleDownloadPdf(savedScanReport.id, savedScanReport.report_number)}
-                    isLoading={isDownloadingPdf}
-                    icon={<Download className="w-3.5 h-3.5" />}
-                  >
-                    PDF
-                  </GlassButton>
-                  <GlassButton
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleDownloadJpg(savedScanReport.id, savedScanReport.report_number)}
-                    isLoading={isDownloadingJpg}
-                    icon={<ImageIcon className="w-3.5 h-3.5" />}
-                  >
-                    JPG
-                  </GlassButton>
-                </div>
-              </div>
-            </GlassCard>
-          )}
-
-          {/* Consent Status Banner */}
-          {consentStatus && (
-            <GlassCard
-              variant="base"
-              className={`p-4 flex items-center justify-between gap-4 border ${
-                consentStatus === 'GRANTED' ? 'border-status-safe/40 bg-status-safe/10' : 'border-white/10'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                {consentStatus === 'GRANTED' ? (
-                  <UserCheck className="w-5 h-5 text-status-safe flex-shrink-0" />
-                ) : (
-                  <UserX className="w-5 h-5 text-white/50 flex-shrink-0" />
-                )}
-                <div>
-                  <p className="text-xs font-bold text-white">
-                    {consentStatus === 'GRANTED'
-                      ? 'Sample Added to Real Human Model Database'
-                      : 'Audit Logged · Strict Zero-Storage Retained'}
-                  </p>
-                  <p className="text-[11px] text-white/60">
-                    {consentStatus === 'GRANTED'
-                      ? 'Consent cryptographically sealed for supervised dataset fine-tuning.'
-                      : 'No raw biometric video was written to disk or database.'}
-                  </p>
-                </div>
-              </div>
-              {savedReportId && (
-                <Link href="/dashboard/reports">
-                  <GlassButton variant="secondary" size="sm">
-                    View Report
-                  </GlassButton>
-                </Link>
-              )}
-            </GlassCard>
-          )}
-        </div>
-
-        {/* ── RIGHT: ANALYSIS PANEL & EXPLAINABILITY (5 Cols) ── */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* Main Assessment Glass Card */}
-          <GlassCard variant="elevated" className="space-y-6">
-            <div className="flex items-center justify-between pb-3 border-b border-white/6">
-              <span className="text-xs font-mono uppercase tracking-wider text-white/50">
-                Inference Result
-              </span>
-              <GlassBadge
-                status={conf >= 80 ? 'safe' : conf >= 60 ? 'warning' : 'danger'}
-                label={analysisResult?.reliability ? `${analysisResult.reliability} RELIABILITY` : 'STANDBY'}
-              />
-            </div>
-
-            {/* Circular Gauge & Status */}
-            <div className="flex items-center gap-6">
-              <ConfidenceRing
-                value={conf}
-                size={110}
-                strokeWidth={9}
-                status={conf >= 80 ? 'safe' : conf >= 60 ? 'warning' : 'danger'}
-              />
-              <div className="space-y-1.5 flex-1">
-                <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white leading-snug">
-                  {analysisResult?.category_label || (isCameraActive ? 'SCANNING...' : 'STANDBY')}
-                </h2>
-                <p className="text-xs text-white/60 leading-relaxed">
-                  {analysisResult?.explanation || 'Awaiting live facial stream and continuous frame buffers.'}
-                </p>
-              </div>
-            </div>
-
-            {/* Calibrated 5-Zone Scale Indicator */}
-            <div className="space-y-1.5 pt-2">
-              <div className="flex justify-between text-[10px] font-mono text-white/50">
-                <span className={conf < 20 && analysisResult?.face_detected ? 'text-status-danger font-bold' : ''}>
-                  &lt;20% Scam
-                </span>
-                <span className={conf >= 50 && conf <= 60 ? 'text-status-warning font-bold' : ''}>
-                  50-60% Idle
-                </span>
-                <span className={conf > 60 && conf <= 75 ? 'text-brand-cyan font-bold' : ''}>
-                  &gt;60% (1 Task)
-                </span>
-                <span className={conf > 75 && conf <= 85 ? 'text-brand-blue font-bold' : ''}>
-                  &gt;75% (2 Tasks)
-                </span>
-                <span className={conf > 85 ? 'text-status-safe font-bold' : ''}>
-                  &gt;85% Real Human
-                </span>
-              </div>
-              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden flex p-0.5 gap-0.5 border border-white/10">
-                <div
-                  className={`h-full rounded-sm transition-all duration-300 ${
-                    conf < 20 && analysisResult?.face_detected ? 'bg-status-danger shadow-glow-safe' : 'bg-status-danger/30'
-                  }`}
-                  style={{ width: '18%' }}
-                />
-                <div
-                  className={`h-full rounded-sm transition-all duration-300 ${
-                    conf >= 50 && conf <= 60 ? 'bg-status-warning' : 'bg-status-warning/30'
-                  }`}
-                  style={{ width: '22%' }}
-                />
-                <div
-                  className={`h-full rounded-sm transition-all duration-300 ${
-                    conf > 60 && conf <= 75 ? 'bg-brand-cyan' : 'bg-brand-cyan/30'
-                  }`}
-                  style={{ width: '20%' }}
-                />
-                <div
-                  className={`h-full rounded-sm transition-all duration-300 ${
-                    conf > 75 && conf <= 85 ? 'bg-brand-blue' : 'bg-brand-blue/30'
-                  }`}
-                  style={{ width: '20%' }}
-                />
-                <div
-                  className={`h-full rounded-sm transition-all duration-300 ${
-                    conf > 85 ? 'bg-status-safe shadow-[0_0_12px_#4ADE80]' : 'bg-status-safe/30'
-                  }`}
-                  style={{ width: '20%' }}
-                />
-              </div>
-            </div>
-          </GlassCard>
-
-          {/* ── "WHY?" STRUCTURED RESULT EXPLANATION (Section 18 & 64 requirement) ── */}
-          <GlassCard variant="elevated" className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-brand-blue" />
-              <h3 className="text-sm font-bold tracking-wider uppercase text-white">
-                WHY THIS RESULT?
-              </h3>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="flex items-center justify-between pb-2 border-b border-white/6">
-                <span className="text-white/70">Temporal consistency</span>
-                <span className="font-semibold text-status-safe font-mono">
-                  {analysisResult?.face_detected ? 'Strong' : 'Standby'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between pb-2 border-b border-white/6">
-                <span className="text-white/70">Liveness evidence</span>
-                <span className="font-semibold text-status-safe font-mono">
-                  {conf >= 75 ? 'Strong' : conf >= 50 ? 'Moderate' : 'Low'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between pb-2 border-b border-white/6">
-                <span className="text-white/70">Replay attack risk</span>
-                <span
-                  className={`font-semibold font-mono ${
-                    analysisResult?.presentation_attack ? 'text-status-danger font-bold' : 'text-status-safe'
-                  }`}
-                >
-                  {analysisResult?.presentation_attack
-                    ? 'Screen Presentation (100%)'
-                    : replayPct < 25
-                    ? 'Low'
-                    : 'Elevated'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between pb-2 border-b border-white/6">
-                <span className="text-white/70">Synthetic indicators</span>
-                <span className="font-semibold text-status-safe font-mono">
-                  {syntheticPct < 25 ? 'Low' : 'Elevated'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between pb-2 border-b border-white/6">
-                <span className="text-white/70">Ocular visibility status</span>
-                <span
-                  className={`font-semibold font-mono ${
-                    analysisResult?.eye_status === 'BOTH_EYES_VISIBLE'
-                      ? 'text-status-safe'
-                      : analysisResult?.eye_status === 'EYE_TOO_BLURRY'
-                      ? 'text-status-warning'
-                      : 'text-white/70'
-                  }`}
-                >
-                  {analysisResult?.eye_status ? analysisResult.eye_status.replace(/_/g, ' ') : 'STANDBY'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-white/70">Input quality</span>
-                <span className="font-semibold text-white font-mono">
-                  {analysisResult?.quality?.sharpness_label || 'Good'}
-                </span>
-              </div>
-            </div>
-
-            {/* Active Machine-Readable Reason Codes (Section 64 & 65) */}
-            {analysisResult?.reason_codes && analysisResult.reason_codes.length > 0 && (
-              <div className="space-y-1.5 pt-2 border-t border-white/6">
-                <span className="text-[10px] font-mono uppercase text-white/40 block">
-                  Active Reason Codes:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {analysisResult.reason_codes.map((code) => {
-                    const info = REASON_CODE_MAP[code] || {
-                      label: code.replace(/_/g, ' '),
-                      severity: 'info',
-                    }
-                    return (
-                      <span
-                        key={code}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono border ${
-                          info.severity === 'danger'
-                            ? 'bg-status-danger/15 border-status-danger/35 text-status-danger font-semibold'
-                            : info.severity === 'warning'
-                            ? 'bg-status-warning/15 border-status-warning/30 text-status-warning'
-                            : info.severity === 'safe'
-                            ? 'bg-status-safe/15 border-status-safe/30 text-status-safe'
-                            : 'bg-white/5 border-white/10 text-white/70'
-                        }`}
-                        title={code}
-                      >
-                        {info.label}
-                      </span>
-                    )
-                  })}
-                </div>
               </div>
             )}
 
@@ -1403,7 +924,7 @@ export default function LiveCameraScanPage() {
               {analysisResult?.user_message ||
                 '"The observed live sequence contains no strong synthetic-media indicators based on the multi-spectral models evaluated."'}
             </p>
-          </GlassCard>
+            </div>
 
           {/* ── DEDICATED EYE & OCULAR ANALYSIS CARD (Sections 7-12) ── */}
           <GlassCard variant="elevated" className="space-y-4">
@@ -1490,119 +1011,8 @@ export default function LiveCameraScanPage() {
             )}
           </GlassCard>
 
-          {/* ── DEDICATED BLINK ENGINE & 25-SECOND OBSERVATION CARD (Sections 13-23) ── */}
-          <GlassCard variant="elevated" className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/6">
-              <div className="flex items-center gap-2">
-                <Timer className="w-4 h-4 text-brand-blue" />
-                <h3 className="text-sm font-bold uppercase tracking-wider text-white">
-                  Blink & 25s Observation Engine
-                </h3>
-              </div>
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
-                  analysisResult?.blink_status === 'CHALLENGE_ACTIVE'
-                    ? 'bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/40 animate-pulse'
-                    : analysisResult?.blink_status === 'CHALLENGE_FAILED'
-                    ? 'bg-status-warning/20 text-status-warning border border-status-warning/30'
-                    : analysisResult?.is_blink_timer_paused
-                    ? 'bg-white/10 text-white/50 border border-white/10'
-                    : 'bg-status-safe/20 text-status-safe border border-status-safe/30'
-                }`}
-              >
-                {analysisResult?.blink_status || 'STANDBY'}
-              </span>
-            </div>
 
-            {/* Real-Time Eye & Blink State HUD (Section 16 Specification) */}
-            <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/8 space-y-0.5">
-                <span className="text-[9px] uppercase text-white/40 block">Left Eye</span>
-                <span className={`text-xs font-bold block ${analysisResult?.eyes?.left_eye_state === 'CLOSED' ? 'text-status-warning' : 'text-status-safe'}`}>
-                  {analysisResult?.eyes?.left_eye_state || analysisResult?.eyes?.left?.state || 'OPEN'}
-                </span>
-                <span className="text-[9px] text-white/40 block">EAR: {analysisResult?.eyes?.left_EAR !== undefined ? analysisResult.eyes.left_EAR.toFixed(2) : (analysisResult?.eyes?.left?.ear !== undefined ? analysisResult.eyes.left.ear.toFixed(2) : '—')}</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/8 space-y-0.5">
-                <span className="text-[9px] uppercase text-white/40 block">Right Eye</span>
-                <span className={`text-xs font-bold block ${analysisResult?.eyes?.right_eye_state === 'CLOSED' ? 'text-status-warning' : 'text-status-safe'}`}>
-                  {analysisResult?.eyes?.right_eye_state || analysisResult?.eyes?.right?.state || 'OPEN'}
-                </span>
-                <span className="text-[9px] text-white/40 block">EAR: {analysisResult?.eyes?.right_EAR !== undefined ? analysisResult.eyes.right_EAR.toFixed(2) : (analysisResult?.eyes?.right?.ear !== undefined ? analysisResult.eyes.right.ear.toFixed(2) : '—')}</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/8 space-y-0.5">
-                <span className="text-[9px] uppercase text-white/40 block">Blink State</span>
-                <span className={`text-xs font-bold block ${analysisResult?.blink?.detected ? 'text-status-safe font-black animate-pulse' : (analysisResult?.blink?.state === 'CLOSED' ? 'text-status-warning' : 'text-brand-cyan')}`}>
-                  {analysisResult?.blink?.detected ? 'BLINK DETECTED ✓' : (analysisResult?.blink?.state || 'OPEN')}
-                </span>
-                <span className="text-[9px] text-white/40 block">Count: {analysisResult?.blink_count ?? 0}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="p-3 rounded-2xl bg-white/4 border border-white/6 space-y-1">
-                <span className="text-[10px] font-mono uppercase text-white/40 block">Verified Blinks</span>
-                <p className="text-2xl font-black font-mono text-brand-cyan">
-                  {analysisResult?.blink_count ?? 0}
-                </p>
-                <span className="text-[10px] text-white/50 block">Biological</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-white/4 border border-white/6 space-y-1">
-                <span className="text-[10px] font-mono uppercase text-white/40 block">Last Blink</span>
-                <p className="text-2xl font-black font-mono text-white">
-                  {analysisResult?.seconds_since_last_blink !== undefined
-                    ? `${analysisResult.seconds_since_last_blink}s`
-                    : '—'}
-                </p>
-                <span className="text-[10px] text-white/50 block">Elapsed</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-white/4 border border-white/6 space-y-1">
-                <span className="text-[10px] font-mono uppercase text-white/40 block">Observation</span>
-                <p className="text-2xl font-black font-mono text-status-safe">
-                  {analysisResult?.continuous_observation_sec !== undefined
-                    ? `${Math.round(analysisResult.continuous_observation_sec)}s`
-                    : '0s'}
-                </p>
-                <span className="text-[10px] text-white/50 block">/ 25s window</span>
-              </div>
-            </div>
-
-            {/* Timer Progress Bar towards 25-Second Observation Window */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-[10px] font-mono text-white/50">
-                <span>Observation Window Progress</span>
-                <span>
-                  {Math.round(Math.min(100, ((analysisResult?.continuous_observation_sec || 0) / 25.0) * 100))}%
-                </span>
-              </div>
-              <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    (analysisResult?.continuous_observation_sec || 0) >= 20
-                      ? 'bg-status-warning'
-                      : 'bg-brand-cyan'
-                  }`}
-                  style={{
-                    width: `${Math.min(100, Math.max(4, ((analysisResult?.continuous_observation_sec || 0) / 25.0) * 100))}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Timer Paused Notice */}
-            {analysisResult?.is_blink_timer_paused && (
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/8 flex items-center gap-2 text-xs text-white/60 font-mono">
-                <PauseCircle className="w-4 h-4 text-status-warning flex-shrink-0" />
-                <span>
-                  Observation Paused: {analysisResult.timer_pause_reason || 'Eyes not clearly visible'}
-                </span>
-              </div>
-            )}
-          </GlassCard>
-
-          {/* ── GUIDED PROTOCOL HUD (Smile, 3 Blinks, Rotation) ── */}
+          {/* ── GUIDED PROTOCOL HUD (Smile, Rotation) ── */}
           {analysisResult?.guided_protocol && (
             <GlassCard variant="elevated" className="space-y-4">
               <div className="flex items-center justify-between">
@@ -1641,34 +1051,6 @@ export default function LiveCameraScanPage() {
                   )}
                 </div>
 
-                {/* Task 2: 3 Blinks */}
-                <div
-                  className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
-                    analysisResult.guided_protocol.task_2_blinks.marked
-                      ? 'bg-status-safe/10 border-status-safe/30 text-white'
-                      : 'bg-white/4 border-white/8 text-white/60'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Eye
-                      className={`w-4 h-4 ${
-                        analysisResult.guided_protocol.task_2_blinks.marked ? 'text-status-safe' : 'text-white/40'
-                      }`}
-                    />
-                    <span>
-                      Task 2: Blink 3 times (
-                      <span className="font-mono font-bold text-white">
-                        {analysisResult.guided_protocol.task_2_blinks.blink_count}
-                      </span>
-                      /3)
-                    </span>
-                  </div>
-                  {analysisResult.guided_protocol.task_2_blinks.marked ? (
-                    <Check className="w-4 h-4 text-status-safe font-bold" />
-                  ) : (
-                    <span className="text-[10px] font-mono text-white/40">PENDING</span>
-                  )}
-                </div>
 
                 {/* Task 3: Smooth Rotation */}
                 <div
@@ -1840,46 +1222,7 @@ export default function LiveCameraScanPage() {
         )}
       </AnimatePresence>
 
-      {/* ── 25-SECOND "PLEASE BLINK" GLASS CHALLENGE MODAL (Sections 19, 20 & 22) ── */}
-      <AnimatePresence>
-        {analysisResult?.blink_challenge?.active && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-canvas/80 backdrop-blur-2xl">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -10 }}
-              className="w-full max-w-sm rounded-4xl glass-floating border-2 border-brand-cyan/60 p-8 space-y-6 text-center shadow-[0_0_60px_rgba(6,182,212,0.35)] relative overflow-hidden"
-            >
-              {/* Glowing decorative halo */}
-              <div className="absolute -top-12 -right-12 w-32 h-32 bg-brand-cyan/20 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-brand-blue/20 rounded-full blur-3xl pointer-events-none" />
 
-              <div className="w-20 h-20 mx-auto rounded-3xl bg-brand-cyan/15 border border-brand-cyan/35 flex items-center justify-center text-brand-cyan shadow-glow-blue animate-pulse">
-                <Eye className="w-10 h-10" />
-              </div>
-
-              <div className="space-y-2">
-                <span className="text-[10px] uppercase font-mono tracking-widest text-brand-cyan font-bold block">
-                  Liveness Verification Challenge
-                </span>
-                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">
-                  PLEASE BLINK
-                </h2>
-                <p className="text-xs text-white/70 leading-relaxed max-w-xs mx-auto">
-                  We couldn't detect a clear blink in the last 25 seconds. Please blink once to continue verification.
-                </p>
-              </div>
-
-              <div className="flex flex-col items-center justify-center gap-1.5 pt-2">
-                <div className="w-20 h-20 rounded-full border-2 border-brand-cyan/70 bg-brand-cyan/10 flex items-center justify-center font-mono text-3xl font-black text-brand-cyan shadow-[0_0_25px_rgba(6,182,212,0.4)]">
-                  0{analysisResult.blink_challenge.countdown_remaining_sec ?? 5}
-                </div>
-                <span className="text-[11px] font-mono text-white/50">seconds remaining</span>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
       {/* ── SAVE SCAN REPORT EXPLICIT CONSENT & PRIVACY MODAL ── */}
       <AnimatePresence>
         {showReportSaveModal && (
@@ -1940,10 +1283,7 @@ export default function LiveCameraScanPage() {
                     <span className="text-white/40">Reliability:</span>
                     <span className="text-white font-bold">{analysisResult?.reliability || 'HIGH'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/40">Observation:</span>
-                    <span className="text-white">{analysisResult?.blink_count ?? 0} Blinks Verified</span>
-                  </div>
+
                 </div>
               </div>
 

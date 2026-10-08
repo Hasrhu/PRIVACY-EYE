@@ -2,7 +2,7 @@
 Privacy Eye — Celeb-DF v2 Forensic Analyzer
 Inspired by Celeb-DF (yuezunli/celeb-deepfakeforensics).
 Targets high-visual-quality deepfakes by examining:
-1. Temporal eye blinking dynamics and Eye Aspect Ratio (EAR) anomalies.
+1. Eye Aspect Ratio (EAR) anomalies.
 2. Landmark stability vs synthetic micro-jitter.
 3. High-detail synthesis residue in sensitive facial regions (eyes, mouth, teeth).
 """

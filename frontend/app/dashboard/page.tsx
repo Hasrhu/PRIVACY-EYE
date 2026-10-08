@@ -323,7 +323,7 @@ export default function DashboardPage() {
             </div>
             <div className="p-3 rounded-2xl bg-white/4 border border-white/6">
               <span className="text-white/40 block text-[10px] uppercase font-mono">Temporal</span>
-              <span className="font-semibold text-white mt-0.5 block">Micro-Motion & Blinks</span>
+              <span className="font-semibold text-white mt-0.5 block">Micro-Motion & Yaw</span>
             </div>
             <div className="p-3 rounded-2xl bg-white/4 border border-white/6">
               <span className="text-white/40 block text-[10px] uppercase font-mono">Replay Attack</span>
@@ -381,7 +381,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between p-3 rounded-2xl bg-white/4 border border-white/6">
               <div>
                 <span className="font-semibold text-white block">Active Protocol Verifier</span>
-                <span className="text-white/40 text-[11px]">Smile + Blinks + Yaw</span>
+                <span className="text-white/40 text-[11px]">Smile + Yaw</span>
               </div>
               <GlassBadge status="safe" label="ACTIVE" />
             </div>

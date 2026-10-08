@@ -74,14 +74,12 @@ async def test_scan_reports_full_lifecycle_and_security():
             "reliability": "HIGH",
             "input_quality": "GOOD",
             "face_detected": True,
-            "blink_count": 3,
-            "blink_status": "TRACKING",
             "eye_status": "BOTH_EYES_VISIBLE",
             "presentation_attack": False,
             "phone_detected": False,
             "spatial_risk": 0.05,
             "liveness_score": 0.885,
-            "explanation": "All 3 live instructions verified: Authentic smile, 3 blinks, smooth rotation.",
+            "explanation": "All live instructions verified: Authentic smile, smooth rotation.",
             "guided_protocol": {
                 "task_3_rotation": {"marked": True}
             }
